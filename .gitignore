@@ -1,0 +1,34 @@
+# Giant files
+*.zip
+*.tar.gz
+*.log
+crash_live.log
+
+# Android-specific
+.gradle/
+.gradle-local/
+build/
+local.properties
+.navigation/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aar
+*.jks
+gradle-8.5/
+jdk-17.0.10+7/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code
+.vscode/
+
+# Data
+data/
+uploads/

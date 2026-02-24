@@ -1,0 +1,276 @@
+"""
+Database utilities for Web Admin — MySQL Version
+"""
+
+import pymysql
+from typing import List, Dict, Optional, Tuple
+from datetime import datetime
+
+from db_config import MYSQL_CONFIG
+
+
+def get_db_connection():
+    """Tạo kết nối đến MySQL database"""
+    return pymysql.connect(
+        **MYSQL_CONFIG,
+        cursorclass=pymysql.cursors.DictCursor
+    )
+
+
+def init_documents_table():
+    """Khởi tạo bảng documents nếu chưa tồn tại"""
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS documents (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            filename VARCHAR(500) NOT NULL,
+            file_type VARCHAR(20) NOT NULL,
+            content LONGTEXT,
+            uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            processed TINYINT DEFAULT 0,
+            chunks_count INT DEFAULT 0
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ''')
+
+    conn.commit()
+    conn.close()
+
+
+def _table_exists(table_name: str) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute('SHOW TABLES LIKE %s', (table_name,))
+    exists = cursor.fetchone() is not None
+    conn.close()
+    return exists
+
+
+def _column_exists(table_name: str, column_name: str) -> bool:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute(f"SHOW COLUMNS FROM {table_name} LIKE %s", (column_name,))
+    exists = cursor.fetchone() is not None
+    conn.close()
+    return exists
+
+
+def ensure_articles_schema():
+    """Đảm bảo bảng articles có các cột/index mới để tránh lỗi 500 khi query."""
+    if not _table_exists('articles'):
+        return
+
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    try:
+        if not _column_exists('articles', 'category'):
+            cursor.execute('ALTER TABLE articles ADD COLUMN category VARCHAR(100) NULL')
+
+        if not _column_exists('articles', 'created_at'):
+            cursor.execute('ALTER TABLE articles ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
+
+        cursor.execute("SHOW INDEX FROM articles WHERE Key_name = 'idx_category'")
+        if cursor.fetchone() is None:
+            cursor.execute('CREATE INDEX idx_category ON articles(category)')
+
+        cursor.execute("SHOW INDEX FROM articles WHERE Key_name = 'idx_created_at'")
+        if cursor.fetchone() is None:
+            cursor.execute('CREATE INDEX idx_created_at ON articles(created_at)')
+
+        # Backfill category cho dữ liệu cũ trước khi fallback về "Chưa phân loại"
+        cursor.execute('''
+            UPDATE articles
+            SET category = CASE
+                WHEN source LIKE '%Weather%' OR source LIKE '%Thời Tiết%' THEN 'Thời tiết Việt Nam'
+                WHEN link LIKE '%/thoi-su/%' THEN 'Thời sự'
+                WHEN link LIKE '%/the-gioi/%' THEN 'Thế giới'
+                WHEN link LIKE '%/kinh-doanh/%' THEN 'Kinh doanh'
+                WHEN link LIKE '%/giai-tri/%' THEN 'Giải trí'
+                WHEN link LIKE '%/the-thao/%' THEN 'Thể thao'
+                WHEN link LIKE '%/phap-luat/%' THEN 'Pháp luật'
+                WHEN link LIKE '%/giao-duc/%' THEN 'Giáo dục'
+                WHEN link LIKE '%/suc-khoe/%' THEN 'Sức khỏe'
+                WHEN link LIKE '%/gia-dinh/%' THEN 'Đời sống'
+                WHEN link LIKE '%/du-lich/%' THEN 'Du lịch'
+                WHEN link LIKE '%/khoa-hoc/%' THEN 'Khoa học'
+                WHEN link LIKE '%/so-hoa/%' OR link LIKE '%/suc-manh-so/%' THEN 'Số hóa'
+                WHEN link LIKE '%/oto-xe-may/%' OR link LIKE '%/xe/%' THEN 'Xe'
+                WHEN link LIKE '%/xa-hoi/%' THEN 'Xã hội'
+                WHEN link LIKE '%/van-hoa/%' THEN 'Văn hóa'
+                ELSE category
+            END
+            WHERE category IS NULL OR category = '' OR category = 'Chưa phân loại'
+        ''')
+
+        cursor.execute('''
+            UPDATE articles
+            SET category = CASE
+                WHEN title REGEXP 'thời tiết|mưa|nắng|bão|áp thấp|nhiệt độ' THEN 'Thời tiết Việt Nam'
+                WHEN title REGEXP 'Ukraine|Nga|Mỹ|Trung Quốc|Israel|Gaza|NATO|EU|Triều Tiên|Iran|quốc tế' THEN 'Thế giới'
+                WHEN title REGEXP 'Hà Nội|TP HCM|thành phố|tỉnh|Quốc hội|Chính phủ|Bộ trưởng' THEN 'Thời sự'
+                WHEN title REGEXP 'kinh doanh|kinh tế|thị trường|chứng khoán|đầu tư|ngân hàng|giá vàng|bất động sản' THEN 'Kinh doanh'
+                WHEN title REGEXP 'sức khỏe|bệnh|y tế|bệnh viện|khám' THEN 'Sức khỏe'
+                WHEN title REGEXP 'thể thao|bóng đá|V-League|U23|vô địch|Olympic' THEN 'Thể thao'
+                WHEN title REGEXP 'giải trí|showbiz|ca sĩ|diễn viên|phim|âm nhạc' THEN 'Giải trí'
+                ELSE category
+            END
+            WHERE category = 'Chưa phân loại'
+        ''')
+
+        cursor.execute("UPDATE articles SET category = 'Chưa phân loại' WHERE category IS NULL OR category = ''")
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_all_news(limit: int = 20, offset: int = 0, category: str = None) -> Tuple[List[Dict], int]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    has_category = _column_exists('articles', 'category')
+
+    category_select = 'category,' if has_category else "'Chưa phân loại' as category,"
+
+    if category and has_category:
+        cursor.execute('SELECT COUNT(*) as cnt FROM articles WHERE category = %s', (category,))
+        total = cursor.fetchone()['cnt']
+
+        cursor.execute('''
+            SELECT id, title, link, summary, source, ''' + category_select + ''' published_date, 
+                   CHAR_LENGTH(content) as content_length
+            FROM articles 
+            WHERE category = %s
+            ORDER BY published_date DESC 
+            LIMIT %s OFFSET %s
+        ''', (category, limit, offset))
+    else:
+        cursor.execute('SELECT COUNT(*) as cnt FROM articles')
+        total = cursor.fetchone()['cnt']
+
+        cursor.execute('''
+            SELECT id, title, link, summary, source, ''' + category_select + ''' published_date, 
+                   CHAR_LENGTH(content) as content_length
+            FROM articles 
+            ORDER BY published_date DESC 
+            LIMIT %s OFFSET %s
+        ''', (limit, offset))
+
+    news = cursor.fetchall()
+    conn.close()
+
+    return news, total
+
+
+def get_news_by_id(news_id: int) -> Optional[Dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM articles WHERE id = %s', (news_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return row
+
+
+def search_news(query: str, limit: int = 20) -> List[Dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    search_pattern = f'%{query}%'
+    cursor.execute('''
+        SELECT id, title, link, summary, source, published_date,
+               CHAR_LENGTH(content) as content_length
+        FROM articles 
+        WHERE title LIKE %s OR summary LIKE %s OR content LIKE %s
+        ORDER BY published_date DESC 
+        LIMIT %s
+    ''', (search_pattern, search_pattern, search_pattern, limit))
+
+    news = cursor.fetchall()
+    conn.close()
+
+    return news
+
+
+def save_document(filename: str, content: str, file_type: str) -> int:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        INSERT INTO documents (filename, file_type, content)
+        VALUES (%s, %s, %s)
+    ''', (filename, file_type, content))
+
+    doc_id = cursor.lastrowid
+    conn.commit()
+    conn.close()
+
+    return doc_id
+
+
+def get_all_documents(limit: int = 50) -> List[Dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT id, filename, file_type, uploaded_at,
+               CHAR_LENGTH(content) as content_length,
+               processed, chunks_count
+        FROM documents 
+        ORDER BY uploaded_at DESC 
+        LIMIT %s
+    ''', (limit,))
+
+    documents = cursor.fetchall()
+    conn.close()
+
+    return documents
+
+
+def get_document_by_id(doc_id: int) -> Optional[Dict]:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    cursor.execute('SELECT * FROM documents WHERE id = %s', (doc_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    return row
+
+
+def get_statistics() -> Dict:
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    has_category = _column_exists('articles', 'category')
+
+    cursor.execute('SELECT COUNT(*) as cnt FROM articles')
+    total_news = cursor.fetchone()['cnt']
+
+    cursor.execute('SELECT COUNT(*) as cnt FROM documents')
+    total_docs = cursor.fetchone()['cnt']
+
+    cursor.execute('SELECT source, COUNT(*) as count FROM articles GROUP BY source')
+    news_by_source = {row['source']: row['count'] for row in cursor.fetchall()}
+    
+    if has_category:
+        cursor.execute('SELECT category, COUNT(*) as count FROM articles GROUP BY category ORDER BY count DESC')
+        news_by_category = {row['category']: row['count'] for row in cursor.fetchall()}
+    else:
+        news_by_category = {}
+
+    conn.close()
+
+    return {
+        'total_news': total_news,
+        'total_documents': total_docs,
+        'news_by_source': news_by_source,
+        'news_by_category': news_by_category
+    }
+
+
+# Khởi tạo bảng documents khi import module
+init_documents_table()
+ensure_articles_schema()

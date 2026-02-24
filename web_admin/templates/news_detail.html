@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ news.title }} - News Chatbot Admin{% endblock %}
+
+{% block content %}
+<div class="news-detail-page">
+    <a href="/news" class="btn btn-sm">← Quay lại</a>
+
+    <article class="news-detail">
+        <header class="news-header">
+            <h1 class="news-title">{{ news.title }}</h1>
+            <div class="news-meta">
+                <span class="badge">{{ news.source }}</span>
+                <span>📅 {{ news.published_date }}</span>
+                <span>📏 {{ news.content|length }} ký tự</span>
+            </div>
+        </header>
+
+        <div class="news-summary">
+            <h3>Tóm tắt:</h3>
+            <p>{{ news.summary }}</p>
+        </div>
+
+        <div class="news-content">
+            <h3>Nội dung đầy đủ:</h3>
+            <div class="content-text">
+                {{ news.content|replace('\n\n', '</p>
+                <p>')|safe }}
+            </div>
+        </div>
+
+        <div class="news-footer">
+            <a href="{{ news.link }}" target="_blank" class="btn btn-primary">
+                Xem bài gốc →
+            </a>
+        </div>
+    </article>
+</div>
+{% endblock %}

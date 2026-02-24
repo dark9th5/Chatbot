@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+
+{% block title %}Danh sách tin tức - News Chatbot Admin{% endblock %}
+
+{% block content %}
+<div class="news-list-page">
+    <h2 class="page-title">📰 Danh sách tin tức</h2>
+
+    <!-- Search Box -->
+    <div class="search-box">
+        <form action="/news" method="get" class="search-form">
+            <input type="text" name="q" placeholder="Tìm kiếm tin tức..." value="{{ query or '' }}"
+                class="search-input">
+            <button type="submit" class="btn btn-primary">🔍 Tìm kiếm</button>
+        </form>
+        {% if category %}
+        <p style="margin-top: 0.5rem; color: var(--text-secondary);">
+            Lọc theo: <strong>{{ category }}</strong> 
+            <a href="/news" style="margin-left: 0.5rem; color: var(--danger);">✖ Bỏ lọc</a>
+        </p>
+        {% endif %}
+    </div>
+
+    <!-- Results Info -->
+    <div class="results-info">
+        <p>Hiển thị {{ news|length }} / {{ total }} tin tức
+            {% if query %} - Kết quả tìm kiếm cho: <strong>"{{ query }}"</strong>{% endif %}
+            {% if category %} - Đề mục: <strong>{{ category }}</strong>{% endif %}
+        </p>
+    </div>
+
+    <!-- News Table -->
+    <div class="table-container">
+        <table class="news-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tiêu đề</th>
+                    <th>Đề mục</th>
+                    <th>Nguồn</th>
+                    <th>Ngày đăng</th>
+                    <th>Độ dài</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in news %}
+                <tr>
+                    <td>{{ item.id }}</td>
+                    <td class="news-title-cell">
+                        <a href="/news/{{ item.id }}" class="news-link">
+                            {{ item.title }}
+                        </a>
+                    </td>
+                    <td>
+                        <a href="/news?category={{ item.category }}" class="badge" 
+                           style="text-decoration: none; cursor: pointer;">
+                            {{ item.category or 'Chưa phân loại' }}
+                        </a>
+                    </td>
+                    <td><span class="badge">{{ item.source }}</span></td>
+                    <td>{{ item.published_date }}</td>
+                    <td>{{ item.content_length }} ký tự</td>
+                    <td>
+                        <a href="/news/{{ item.id }}" class="btn btn-sm">Xem</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <div class="pagination">
+        {% if page > 1 %}
+        <a href="/news?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if category %}&category={{ category }}{% endif %}" class="btn btn-sm">← Trước</a>
+        {% endif %}
+
+        <span class="page-info">Trang {{ page }} / {{ total_pages }}</span>
+
+        {% if page < total_pages %}
+        <a href="/news?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+            class="btn btn-sm">Sau →</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

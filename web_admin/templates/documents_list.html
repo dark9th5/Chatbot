@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Documents - News Chatbot Admin{% endblock %}
+
+{% block content %}
+<div class="documents-page">
+    <h2 class="page-title">📚 Danh sách Documents</h2>
+
+    {% if documents %}
+    <div class="table-container">
+        <table class="news-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Tên file</th>
+                    <th>Loại</th>
+                    <th>Ngày upload</th>
+                    <th>Độ dài</th>
+                    <th>Hành động</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for doc in documents %}
+                <tr>
+                    <td>{{ doc.id }}</td>
+                    <td>{{ doc.filename }}</td>
+                    <td><span class="badge">{{ doc.file_type }}</span></td>
+                    <td>{{ doc.uploaded_at }}</td>
+                    <td>{{ doc.content_length }} ký tự</td>
+                    <td>
+                        <a href="/documents/{{ doc.id }}" class="btn btn-sm">Xem</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="text-muted">Chưa có document nào được upload.</p>
+    {% endif %}
+</div>
+{% endblock %}

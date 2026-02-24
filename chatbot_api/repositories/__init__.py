@@ -1,0 +1,2 @@
+from chatbot_api.repositories.chunk_repository import ChunkRepository
+from chatbot_api.repositories.article_repository import ArticleRepository

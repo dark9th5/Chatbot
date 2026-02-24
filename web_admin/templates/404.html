@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block title %}404 - Not Found{% endblock %}
+
+{% block content %}
+<div class="error-page">
+    <h1>404</h1>
+    <h2>{{ message or "Không tìm thấy trang" }}</h2>
+    <a href="/" class="btn btn-primary">← Về trang chủ</a>
+</div>
+{% endblock %}

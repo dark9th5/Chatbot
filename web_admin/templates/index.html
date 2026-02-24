@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - News Chatbot Admin{% endblock %}
+
+{% block content %}
+<div class="dashboard">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 class="page-title" style="margin-bottom: 0;">📊 Dashboard</h2>
+        <button id="btnRefreshNews" class="btn btn-primary" onclick="refreshNews()"
+            style="display: flex; align-items: center; gap: 0.5rem;">
+            🔄 Cập nhật tin tức
+        </button>
+    </div>
+
+    <!-- Refresh status -->
+    <div id="refreshStatus" style="display: none; margin-bottom: 1.5rem;">
+        <div class="section" id="refreshContent" style="padding: 1rem 1.5rem;">
+            Đang cập nhật...
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">📰</div>
+            <div class="stat-content">
+                <h3>{{ stats.total_news }}</h3>
+                <p>Tổng tin tức</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <div class="stat-icon">📄</div>
+            <div class="stat-content">
+                <h3>{{ stats.total_documents }}</h3>
+                <p>Documents</p>
+            </div>
+        </div>
+
+        {% for source, count in stats.news_by_source.items() %}
+        <div class="stat-card">
+            <div class="stat-icon">🔖</div>
+            <div class="stat-content">
+                <h3>{{ count }}</h3>
+                <p>{{ source }}</p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Category Statistics -->
+    {% if stats.news_by_category %}
+    <div class="section" style="margin-top: 2rem;">
+        <h3 class="section-title">📂 Phân loại theo đề mục</h3>
+        <div class="stats-grid" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));">
+            {% for category, count in stats.news_by_category.items() %}
+            <a href="/news?category={{ category }}" class="stat-card" style="text-decoration: none; transition: all 0.2s; cursor: pointer;">
+                <div class="stat-icon">📚</div>
+                <div class="stat-content">
+                    <h3>{{ count }}</h3>
+                    <p>{{ category }}</p>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent News -->
+    <div class="section">
+        <h3 class="section-title">📌 Tin tức mới nhất</h3>
+        <div class="news-cards">
+            {% for item in recent_news %}
+            <div class="news-card">
+                <div class="news-header">
+                    <span class="news-source">{{ item.source }}</span>
+                    <span class="news-date">{{ item.published_date }}</span>
+                </div>
+                <h4 class="news-title">
+                    <a href="/news/{{ item.id }}">{{ item.title }}</a>
+                </h4>
+                <p class="news-summary">{{ item.summary[:150] }}...</p>
+                <div class="news-meta">
+                    <span>📏 {{ item.content_length }} ký tự</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        <div class="text-center">
+            <a href="/news" class="btn btn-primary">Xem tất cả tin tức →</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+async function refreshNews() {
+    const btn = document.getElementById('btnRefreshNews');
+    const statusDiv = document.getElementById('refreshStatus');
+    const contentDiv = document.getElementById('refreshContent');
+
+    // Disable button + show loading
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Đang cập nhật...';
+    statusDiv.style.display = 'block';
+    contentDiv.innerHTML = '<div style="display:flex;align-items:center;gap:0.75rem;"><div class="progress-bar" style="flex:1;height:6px;"><div class="progress-fill" style="width:100%;"></div></div> Đang crawl RSS & xử lý...</div>';
+
+    try {
+        const response = await fetch('/api/refresh-news', { method: 'POST' });
+        const data = await response.json();
+
+        if (data.success) {
+            contentDiv.innerHTML = `<div style="color: var(--success); font-weight: 600;">✅ ${data.message}</div>`;
+            // Reload trang sau 2 giây để cập nhật stats
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            contentDiv.innerHTML = `<div style="color: var(--danger);">❌ Lỗi: ${data.error}</div>`;
+            btn.disabled = false;
+            btn.innerHTML = '🔄 Cập nhật tin tức';
+        }
+    } catch (error) {
+        contentDiv.innerHTML = `<div style="color: var(--danger);">❌ Lỗi kết nối: ${error.message}</div>`;
+        btn.disabled = false;
+        btn.innerHTML = '🔄 Cập nhật tin tức';
+    }
+}
+</script>
+{% endblock %}
