@@ -1,4 +1,5 @@
 from .llm_service import LLMService
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 class QueryExpansionService:
     """
@@ -9,7 +10,7 @@ class QueryExpansionService:
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
 
-    def expand_query(self, original_query: str) -> str:
+    def expand_query(self, original_query: str, timeout_seconds: float = 4.0) -> str:
         """
         Mở rộng câu hỏi gốc.
         Ví dụ: "giá vàng" -> "Giá vàng hôm nay tại Việt Nam biến động như thế nào?"
@@ -29,7 +30,14 @@ class QueryExpansionService:
         """
         
         try:
-            expanded_query = self.llm_service.generate_answer(context="", question=prompt)
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(
+                    self.llm_service.generate_answer,
+                    context="",
+                    question=prompt,
+                )
+                expanded_query = future.result(timeout=timeout_seconds)
+
             # Clean up response (remove potential quotes or prefixes)
             expanded_query = expanded_query.strip().strip('"').strip("'")
             
@@ -37,8 +45,11 @@ class QueryExpansionService:
             if len(expanded_query) > 200: 
                 return original_query
                 
-            print(f"🔄 [Query Expansion] '{original_query}' -> '{expanded_query}'")
+            print(f"[Query Expansion] '{original_query}' -> '{expanded_query}'")
             return expanded_query
+        except FutureTimeoutError:
+            print(f"[Query Expansion] Timeout after {timeout_seconds}s, use original query.")
+            return original_query
         except Exception as e:
-            print(f"⚠ [Query Expansion] Error: {e}")
+            print(f"[Query Expansion] Error: {e}")
             return original_query

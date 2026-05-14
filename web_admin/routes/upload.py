@@ -26,27 +26,27 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 def _process_document_for_chatbot(doc_id: int, filename: str, text: str):
     """
     Tự động xử lý document thành nguồn dữ liệu cho chatbot.
-    Pipeline: Text → Article DB → Chunking → Vector Embedding
+    Pipeline: Text → Article DB → Chunking → Vector Embedding → Qdrant
     """
-    from chunking_vectorizer import (
-        sliding_window_chunk, TextVectorizer,
-        init_chunks_table, save_chunks_to_db
-    )
+    from pipeline.chunking_vectorizer import semantic_chunking
+    from chatbot_api.dependencies import get_embedding_service, get_qdrant_service
+    import re
 
     conn = get_db_connection()
     cursor = conn.cursor()
 
     try:
-        # Bước 1: Lưu document dưới dạng article
+        # Bước 1: Lưu document dưới dạng article vào MySQL (để quản lý bài gốc)
         cursor.execute('''
-            INSERT IGNORE INTO articles (title, link, summary, content, source, published_date)
-            VALUES (%s, %s, %s, %s, %s, NOW())
+            INSERT IGNORE INTO articles (title, link, summary, content, source, published_date, category)
+            VALUES (%s, %s, %s, %s, %s, NOW(), %s)
         ''', (
             filename,
             f"upload://{filename}",
             text[:300] if len(text) > 300 else text,
             text,
-            "Upload"
+            "Upload",
+            "Tài liệu"
         ))
         article_id = cursor.lastrowid
         conn.commit()
@@ -57,46 +57,58 @@ def _process_document_for_chatbot(doc_id: int, filename: str, text: str):
             row = cursor.fetchone()
             article_id = row['id'] if row else None
 
-        conn.close()
-
         if not article_id:
+            conn.close()
             return False
 
-        # Bước 2: Chunking (Sliding Window)
-        chunks = sliding_window_chunk(text, chunk_size=256, overlap=50)
+        # Bước 2: Chunking (Sử dụng Vietnamese Optimized Splitter)
+        chunks = semantic_chunking(text, chunk_size=500, chunk_overlap=100)
 
         if not chunks:
+            conn.close()
             return False
 
         # Bước 3: Vector Embedding
-        vectorizer = TextVectorizer()
-        embeddings = vectorizer.encode(chunks)
+        embedding_service = get_embedding_service()
+        embeddings = embedding_service.encode_batch(chunks)
 
-        # Bước 4: Lọc trùng lặp
-        chunks_filtered, embeddings_filtered = vectorizer.filter_duplicate_chunks(
-            chunks, embeddings, threshold=0.95
-        )
+        # Bước 4: Chuẩn bị Metadata và lưu vào Qdrant
+        qdrant = get_qdrant_service()
+        
+        from datetime import date
+        today_str = date.today().strftime("%Y-%m-%d")
+        today_int = int(date.today().strftime("%Y%m%d"))
+        
+        metadatas = []
+        for chunk in chunks:
+            metadatas.append({
+                "article_id": article_id,
+                "title": filename,
+                "source": "Upload",
+                "link": f"upload://{filename}",
+                "published_date": today_str,
+                "pub_date_int": today_int,
+                "category": "Tài liệu"
+            })
+            
+        qdrant.add_chunks(chunks, embeddings, metadatas)
 
-        # Bước 5: Lưu vào DB
-        init_chunks_table()
-        save_chunks_to_db(None, article_id, chunks_filtered, embeddings_filtered)
-
-        # Bước 6: Đánh dấu document đã xử lý
-        conn2 = get_db_connection()
-        cursor2 = conn2.cursor()
-        cursor2.execute('''
+        # Bước 5: Đánh dấu document đã xử lý trong bảng documents của Web Admin
+        cursor.execute('''
             UPDATE documents SET processed = 1, chunks_count = %s
             WHERE id = %s
-        ''', (len(chunks_filtered), doc_id))
-        conn2.commit()
-        conn2.close()
+        ''', (len(chunks), doc_id))
+        conn.commit()
+        conn.close()
 
         return True
 
     except Exception as e:
         print(f"Error processing document for chatbot: {e}")
-        conn.close()
+        if conn:
+            conn.close()
         return False
+
 
 
 @router.get("/upload", response_class=HTMLResponse)

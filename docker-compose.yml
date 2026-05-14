@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - GROQ_MODEL=${GROQ_MODEL}
+      - HUGGINGFACE_API_KEY=${HUGGINGFACE_API_KEY}
+      - HUGGINGFACE_MODEL=${HUGGINGFACE_MODEL}
+    volumes:
+      - .:/app
+    restart: unless-stopped

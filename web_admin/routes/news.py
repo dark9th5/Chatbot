@@ -95,7 +95,7 @@ def _run_rss_refresh():
         print(f"\n[{datetime.now()}] Starting RSS refresh...")
         
         from etl.crawler import AsyncNewsCrawler
-        from chunking_vectorizer import process_all_articles
+        from pipeline.chunking_vectorizer import process_all_articles
 
         # Bước 1: Thu thập tin tức mới từ RSS (Dùng ETL mới)
         crawler = AsyncNewsCrawler()
@@ -126,7 +126,7 @@ def _auto_refresh_job():
 
 # Đăng ký job tự động lấy tin mỗi 1h
 scheduler.add_job(_auto_refresh_job, 'interval', hours=1, id='auto_refresh_news')
-print("✓ Scheduled auto-refresh news every 1 hour")
+print("[OK] Scheduled auto-refresh news every 1 hour")
 
 
 @router.post("/api/refresh-news")

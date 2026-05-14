@@ -1,8 +1,0 @@
-
-📈 FINAL EVALUATION REPORT
-==================================================
-Total Test Cases: 2
-✅ Avg Context Precision: 0.1667
-✅ Avg Answer Similarity: 0.4636
-⚡ Avg Latency: 16.74s
-==================================================

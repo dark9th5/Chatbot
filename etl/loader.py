@@ -11,7 +11,7 @@ class DatabaseLoader:
 
     def _get_connection(self):
         """Tạo kết nối MySQL"""
-        from db_config import MYSQL_CONFIG
+        from pipeline.config import MYSQL_CONFIG
         return pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
 
     def _init_database(self):

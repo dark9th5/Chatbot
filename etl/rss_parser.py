@@ -68,14 +68,15 @@ class CustomRSSParser:
             return []
 
     def _clean_html(self, raw_html: str) -> str:
-        """Loại bỏ thẻ HTML đơn giản (CDATA thường chứa HTML)"""
+        """Loại bỏ thẻ HTML và giải mã các thực thể (entities)."""
         if not raw_html:
             return ""
-        # Cách đơn giản: dùng regex hoặc BS4 (nhưng để nhanh thì regex)
         import re
-        cleanr = re.compile('<.*?>')
-        cleantext = re.sub(cleanr, '', raw_html)
-        return cleantext.strip()
+        import html
+        cleanr = re.compile('<.*?>|&([a-z0-9]+|#[0-9]{1,6}|#x[0-9a-f]{1,6});')
+        cleantext = re.sub(r'<.*?>', '', raw_html)
+        return html.unescape(cleantext).strip()
+
 
     def _parse_date(self, date_str: str) -> Optional[str]:
         """Parse chuẩn RFC 822 (example: 'Fri, 27 Aug 2021 08:00:00 +0700')"""

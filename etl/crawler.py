@@ -83,12 +83,12 @@ class AsyncNewsCrawler:
                     # Tự động tóm tắt 3 câu cốt lõi (TextRank)
                     article.summary = self.summarizer.summarize(full_content, top_k=3)
         except Exception as e:
-            print(f"  ⚠ Error extracting content for {article.link}: {e}")
+            print(f"  [Error] Error extracting content for {article.link}: {e}")
         return article
 
     def crawl_feed(self, url: str, source_name: str, category: str, limit: int = 10) -> List[Article]:
         """Crawl một RSS feed"""
-        print(f"📡 Fetching RSS: {url}...")
+        print(f"[RSS] Fetching RSS: {url}...")
         
         # 1. Parse RSS (Sequential - nhẹ)
         raw_articles = self.parser.parse(url, source_name, category)
@@ -96,7 +96,7 @@ class AsyncNewsCrawler:
         # Limit số lượng bài mới để crawl content (tránh spam)
         target_articles = raw_articles[:limit]
         
-        print(f"  ✓ Found {len(raw_articles)} items. Processing {len(target_articles)} items...")
+        print(f"  [OK] Found {len(raw_articles)} items. Processing {len(target_articles)} items...")
         
         # 2. Extract Full Content (Concurrent - nặng I/O)
         final_articles = []
@@ -117,13 +117,13 @@ class AsyncNewsCrawler:
                     final_articles.append(res)
                     
             except Exception as e:
-                print(f"  ✗ Task error: {e}")
+                print(f"  [Error] Task error: {e}")
                 
         return final_articles
 
     def run(self):
         """Chạy toàn bộ quy trình Crawl"""
-        print(f"🚀 Starting Async Crawler (Workers={self.max_workers})...")
+        print(f"[Crawler] Starting Async Crawler (Workers={self.max_workers})...")
         start_time = time.time()
         total_collected = 0
 
@@ -141,8 +141,8 @@ class AsyncNewsCrawler:
                         
         duration = time.time() - start_time
         print("\n" + "="*60)
-        print(f"✅ Crawling Completed in {duration:.2f}s")
-        print(f"📦 Total Articles: {total_collected}")
+        print(f"[OK] Crawling Completed in {duration:.2f}s")
+        print(f"[Data] Total Articles: {total_collected}")
         print("="*60)
         return total_collected
 

@@ -7,7 +7,7 @@ import pymysql
 from typing import Optional, List, Dict, Any
 from contextlib import contextmanager
 
-from db_config import MYSQL_CONFIG
+from pipeline.config import MYSQL_CONFIG
 
 
 class BaseRepository:

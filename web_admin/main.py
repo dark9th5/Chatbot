@@ -23,7 +23,7 @@ allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "*")
 allowed_origins = ["*"] if allowed_origins_raw.strip() == "*" else [
     origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()
 ]
-app.state.public_base_url = os.getenv("PUBLIC_BASE_URL", "http://127.0.0.1:8000")
+app.state.public_base_url = os.getenv("PUBLIC_BASE_URL", "http://192.168.0.104:8000")
 
 # CORS Middleware — cho phép Android app gọi API
 app.add_middleware(
@@ -62,6 +62,13 @@ async def public_config():
     }
 
 
+@app.get("/_debug_env")
+async def _debug_env():
+    """Debug endpoint to inspect PUBLIC_BASE_URL values at runtime."""
+    return {
+        "app_state_public_base_url": app.state.public_base_url,
+        "env_PUBLIC_BASE_URL": os.getenv("PUBLIC_BASE_URL")
+    }
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("web_admin.main:app", host="0.0.0.0", port=8000, reload=True)

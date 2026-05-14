@@ -6,7 +6,21 @@ import pymysql
 from typing import List, Dict, Optional, Tuple
 from datetime import datetime
 
-from db_config import MYSQL_CONFIG
+from pipeline.config import MYSQL_CONFIG
+
+
+CATEGORY_ALIASES = {
+    'Công nghệ': 'Số hóa',
+    'Thời tiết Hà Nội': 'Thời tiết Việt Nam',
+}
+
+
+def _normalize_category_value(category: Optional[str]) -> Optional[str]:
+    if not category:
+        return category
+
+    cleaned = category.strip()
+    return CATEGORY_ALIASES.get(cleaned, cleaned)
 
 
 def get_db_connection():
@@ -104,6 +118,9 @@ def ensure_articles_schema():
             WHERE category IS NULL OR category = '' OR category = 'Chưa phân loại'
         ''')
 
+        cursor.execute("UPDATE articles SET category = 'Số hóa' WHERE category = 'Công nghệ'")
+        cursor.execute("UPDATE articles SET category = 'Thời tiết Việt Nam' WHERE category = 'Thời tiết Hà Nội'")
+
         cursor.execute('''
             UPDATE articles
             SET category = CASE
@@ -129,6 +146,7 @@ def get_all_news(limit: int = 20, offset: int = 0, category: str = None) -> Tupl
     conn = get_db_connection()
     cursor = conn.cursor()
     has_category = _column_exists('articles', 'category')
+    category = _normalize_category_value(category)
 
     category_select = 'category,' if has_category else "'Chưa phân loại' as category,"
 
@@ -257,7 +275,10 @@ def get_statistics() -> Dict:
     
     if has_category:
         cursor.execute('SELECT category, COUNT(*) as count FROM articles GROUP BY category ORDER BY count DESC')
-        news_by_category = {row['category']: row['count'] for row in cursor.fetchall()}
+        news_by_category = {}
+        for row in cursor.fetchall():
+            normalized_category = _normalize_category_value(row['category'])
+            news_by_category[normalized_category] = news_by_category.get(normalized_category, 0) + row['count']
     else:
         news_by_category = {}
 

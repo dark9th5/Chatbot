@@ -24,11 +24,11 @@ class EmbeddingService:
 
     def __init__(self):
         """Tải model khi khởi tạo (chỉ gọi 1 lần)"""
-        print(f"⏳ [EmbeddingService] Đang tải model: {self.MODEL_NAME}")
+        print(f"[EmbeddingService] Dang tai model: {self.MODEL_NAME}")
         # device='cpu' để đảm bảo chạy ổn định trên máy không GPU
         self._model = SentenceTransformer(self.MODEL_NAME)
         self._dimension = self._model.get_sentence_embedding_dimension()
-        print(f"✓ [EmbeddingService] Model sẵn sàng! Dimension: {self._dimension}")
+        print(f"[EmbeddingService] Tai model thanh cong! Dimension: {self._dimension}")
 
     @property
     def dimension(self) -> int:

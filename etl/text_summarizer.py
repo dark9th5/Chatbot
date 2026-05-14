@@ -16,9 +16,8 @@ class TextRankSummarizer:
 
     def _split_sentences(self, text: str) -> List[str]:
         """Tách câu đơn giản bằng regex."""
-        # Bảo vệ số thập phân và lỗi chấm
-        text = re.sub(r'(?<!\d)\.(?!\d)', '. ', text)
-        sentences = re.split(r'[.!?]+', text)
+        # Tách câu: chấm/hỏi/than theo sau bởi khoảng trắng hoặc cuối chuỗi
+        sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if len(s.strip()) > 15] # Bỏ câu quá ngắn
 
     def _calculate_similarity(self, s1: str, s2: str) -> float:
