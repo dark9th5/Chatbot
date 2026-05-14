@@ -3,10 +3,6 @@ Dependencies — Dependency Injection Wiring
 Khai báo và quản lý singleton instances cho toàn bộ ứng dụng.
 
 Design Pattern: Dependency Injection (FastAPI built-in DI)
-<<<<<<< HEAD
-"""
-
-=======
 
 Configuration via Environment Variables:
 - LLM_PROVIDER: 'gemini', 'openai', 'llama_cpp', 'ollama' (default: 'ollama')
@@ -17,23 +13,21 @@ Configuration via Environment Variables:
 
 import os
 import logging
->>>>>>> c1d95b9 (Initial commit)
 from functools import lru_cache
 from fastapi import HTTPException
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from chatbot_api.repositories.chunk_repository import ChunkRepository
 from chatbot_api.repositories.article_repository import ArticleRepository
 from chatbot_api.services.embedding_service import EmbeddingService
 from chatbot_api.services.qdrant_service import QdrantService
 from chatbot_api.services.chatbot_service import ChatbotService
-<<<<<<< HEAD
-from chatbot_api.services.llm_service import LLMService, GeminiProvider, OllamaProvider
-=======
 from chatbot_api.services.llm_service import (
-    LLMService, GeminiProvider, OllamaProvider, OpenAIProvider, 
-    LlamaCppProvider, FallbackLLMProvider
+    LLMService, GroqProvider, HuggingFaceProvider, FallbackLLMProvider
 )
->>>>>>> c1d95b9 (Initial commit)
 
 
 # ============================================================
@@ -86,60 +80,34 @@ def get_chatbot_service() -> ChatbotService:
     """
     Singleton ChatbotService.
     Inject: EmbeddingService, QdrantService, ArticleRepository, LLMService, QueryExpansionService.
-<<<<<<< HEAD
-    """
-    llm_type = "ollama"
-
-    if llm_type == "gemini":
-        api_key = "YOUR_GEMINI_API_KEY"
-        provider = GeminiProvider(api_key=api_key)
-    else:
-=======
     
     Configuration từ environment variables:
-    - LLM_PROVIDER: 'gemini', 'openai', 'llama_cpp', 'ollama', hoặc 'gemini_fallback_openai' (mặc định: ollama)
-    - GEMINI_API_KEY: Google Gemini API key
-    - OPENAI_API_KEY: OpenAI API key
-    - LLAMA_CPP_MODEL_PATH: Đường dẫn tệp GGUF model
+    - GROQ_API_KEY: Groq API key (bắt buộc)
+    - GROQ_MODEL: Model name (mặc định: mixtral-8x7b-32768)
     """
-    llm_provider = os.getenv("LLM_PROVIDER", "ollama").lower()
-    
+    llm_provider = os.getenv("LLM_PROVIDER", "groq").lower()
+
     try:
-        if llm_provider == "gemini":
-            api_key = os.getenv("GEMINI_API_KEY")
-            if not api_key:
-                raise ValueError("GEMINI_API_KEY environment variable not set")
-            provider = GeminiProvider(api_key=api_key)
-            
-        elif llm_provider == "openai":
-            api_key = os.getenv("OPENAI_API_KEY")
-            if not api_key:
-                raise ValueError("OPENAI_API_KEY environment variable not set")
-            provider = OpenAIProvider(api_key=api_key, model_name="gpt-3.5-turbo")
-            
-        elif llm_provider == "llama_cpp":
-            model_path = os.getenv("LLAMA_CPP_MODEL_PATH", "models/qwen2.5-1.5b.gguf")
-            provider = LlamaCppProvider(model_path=model_path)
-            
-        elif llm_provider == "gemini_fallback_openai":
-            # Primary: Gemini, Fallback: OpenAI
-            gemini_key = os.getenv("GEMINI_API_KEY")
-            openai_key = os.getenv("OPENAI_API_KEY")
-            if not gemini_key or not openai_key:
-                raise ValueError("Both GEMINI_API_KEY and OPENAI_API_KEY must be set")
-            primary = GeminiProvider(api_key=gemini_key)
-            fallback = OpenAIProvider(api_key=openai_key)
-            provider = FallbackLLMProvider(primary=primary, fallback=fallback)
-            
-        else:  # ollama (default)
-            provider = OllamaProvider(model_name="qwen2.5:1.5b")
-            
+        # Primary: Groq
+        groq_key = os.getenv("GROQ_API_KEY")
+        if not groq_key:
+            raise ValueError("GROQ_API_KEY environment variable not set")
+        groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+        primary = GroqProvider(api_key=groq_key, model_name=groq_model)
+
+        # Fallback: HuggingFace (optional)
+        hf_key = os.getenv("HUGGINGFACE_API_KEY")
+        fallback = None
+        if hf_key:
+            hf_model = os.getenv("HUGGINGFACE_MODEL", "mistralai/Mistral-7B-Instruct-v0.2")
+            fallback = HuggingFaceProvider(api_key=hf_key, model_name=hf_model)
+
+        provider = FallbackLLMProvider(primary=primary, fallback=fallback)
+
     except (ValueError, ImportError) as e:
-        # Fallback to Ollama nếu cấu hình lỗi
         import logging
-        logging.warning(f"Failed to initialize {llm_provider} provider: {str(e)}. Falling back to Ollama.")
->>>>>>> c1d95b9 (Initial commit)
-        provider = OllamaProvider(model_name="qwen2.5:1.5b")
+        logging.error(f"Failed to initialize LLM provider: {str(e)}")
+        raise
 
     llm_service = LLMService(provider)
     query_expansion_service = QueryExpansionService(llm_service)
