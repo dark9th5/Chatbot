@@ -8,11 +8,13 @@ class JaccardDeduplicator:
     Kỹ thuật: Biến đổi văn bản thành tập hợp các từ (hoặc N-grams) và đo tỷ lệ giao/hợp.
     Giúp loại bỏ các bài báo "đạo văn" hoặc xào bài giữa các trang báo.
     """
+    # Khởi tạo bộ lọc trùng lặp với ngưỡng tương đồng mặc định là 0.8
     def __init__(self, threshold: float = 0.8):
         self.threshold = threshold
         # Lưu trữ signature (set of words) của các bài đã quét trong session
         self.processed_signatures: List[Set[str]] = []
 
+    # Tạo tập hợp các n-gram từ văn bản để so sánh
     def _get_ngrams(self, text: str, n: int = 2) -> Set[str]:
         """Chuyển văn bản thành set các N-grams để so sánh."""
         if not text:
@@ -34,6 +36,7 @@ class JaccardDeduplicator:
             
         return ngrams
 
+    # Kiểm tra xem bài báo có bị trùng lặp với dữ liệu đã có không
     def is_duplicate(self, article: Article) -> bool:
         """Kiểm tra xem bài báo này có bị trùng lặp với các bài trước đó không."""
         # Chỉ check trùng lặp nếu có nội dung

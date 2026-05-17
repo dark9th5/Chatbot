@@ -37,18 +37,29 @@ app.add_middleware(
 app.include_router(chat_router)
 
 
+# Sự kiện khởi chạy ứng dụng: khởi tạo các dịch vụ cần thiết
 @app.on_event("startup")
 async def startup_event():
     """On startup — initialize services (lazy load via DI)."""
     logger.info("Chatbot API starting...")
+    # Pre-load services to avoid delay on first request
+    from chatbot_api.dependencies import get_chatbot_service, get_graph_search_service
+    try:
+        get_graph_search_service()
+        get_chatbot_service()
+        logger.info("Chatbot services (Graph + LLM) initialized successfully.")
+    except Exception as e:
+        logger.error(f"Failed to initialize services on startup: {e}")
 
 
+# Sự kiện đóng ứng dụng: dọn dẹp tài nguyên
 @app.on_event("shutdown")
 async def shutdown_event():
     """On shutdown — cleanup."""
     logger.info("Chatbot API shutting down...")
 
 
+# Endpoint gốc để kiểm tra trạng thái hoạt động của API
 @app.get("/")
 async def root():
     """Root endpoint."""
@@ -58,7 +69,7 @@ async def root():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        app,
+        "chatbot_api.main:app",
         host="0.0.0.0",
         port=8000,
         reload=True

@@ -17,8 +17,7 @@ from chatbot_api.schemas.chat import (
 from chatbot_api.services.chatbot_service import ChatbotService
 from chatbot_api.dependencies import (
     get_chatbot_service,
-    get_qdrant_service,
-    get_embedding_service
+    get_graph_search_service
 )
 
 
@@ -29,20 +28,15 @@ router = APIRouter(prefix="/api", tags=["Chatbot API"])
     "/chat",
     response_model=ChatResponse,
     summary="Hỏi đáp với Chatbot",
-    description="Gửi câu hỏi và nhận câu trả lời dựa trên tin tức đã thu thập. Hỗ trợ lọc theo danh mục và ngày tháng năm."
+    description="Gửi câu hỏi và nhận câu trả lời dựa trên Đồ thị Tri thức (Knowledge Graph)."
 )
-async def chat(
+# Xử lý yêu cầu chat từ người dùng và trả về câu trả lời từ AI
+def chat(
     request: ChatRequest,
     service: ChatbotService = Depends(get_chatbot_service)
 ) -> ChatResponse:
     """
-    Endpoint chính của chatbot.
-    
-    - Nhận câu hỏi từ user
-    - Lọc theo danh mục (nếu có)
-    - Lọc theo khoảng ngày (nếu có)
-    - Tìm kiếm ngữ nghĩa trong Qdrant
-    - Trả về câu trả lời + nguồn trích dẫn
+    Endpoint chính của chatbot (Knowledge Graph Version).
     """
     return service.get_answer(
         question=request.question,
@@ -58,16 +52,16 @@ async def chat(
     response_model=HealthResponse,
     summary="Kiểm tra trạng thái Chatbot API"
 )
-async def chatbot_health(
-    embedding_service=Depends(get_embedding_service),
-    qdrant_service=Depends(get_qdrant_service)
+# Kiểm tra trạng thái sức khỏe của dịch vụ Chatbot
+def chatbot_health(
+    graph_service=Depends(get_graph_search_service)
 ) -> HealthResponse:
-    """Health check cho chatbot service"""
+    """Health check cho chatbot service (Graph Version)"""
     return HealthResponse(
         status="healthy",
-        service="Chatbot API",
-        model_loaded=embedding_service.is_loaded,
-        total_chunks=qdrant_service.count()
+        service="Chatbot API (Knowledge Graph)",
+        model_loaded=True, # No more AI models to load for search
+        total_chunks=0 # Graph based
     )
 
 
@@ -76,25 +70,32 @@ async def chatbot_health(
     response_model=CategoriesResponse,
     summary="Lấy danh sách danh mục"
 )
-async def list_categories(
-    qdrant_service=Depends(get_qdrant_service)
-) -> CategoriesResponse:
-    """Danh sách danh mục dùng cho UI filter (Android/Web)."""
-    categories = qdrant_service.get_normalized_categories()
-    return CategoriesResponse(categories=categories, count=len(categories))
-
-
-@router.get(
-    "/_debug/categories",
-    tags=["Debug"]
-)
-async def debug_categories(
-    qdrant_service=Depends(get_qdrant_service)
-) -> dict:
-    """[DEBUG] Lấy danh sách danh mục trong DB"""
-    categories = qdrant_service.get_all_categories()
-    return {
-        "categories": sorted(list(categories)),
-        "count": len(categories)
-    }
+# Lấy danh sách các danh mục tin tức từ MySQL
+def list_categories() -> CategoriesResponse:
+    """Danh sách danh mục lấy trực tiếp từ MySQL articles."""
+    categories = set()
+    try:
+        from web_admin.utils.db import get_db_connection
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # 1. Lấy tất cả danh mục hiện có trong bảng articles
+        cursor.execute("SELECT DISTINCT category FROM articles WHERE category IS NOT NULL")
+        rows = cursor.fetchall()
+        for row in rows:
+            if row['category']:
+                categories.add(row['category'])
+        
+        # 2. Kiểm tra nếu có dữ liệu Tài liệu
+        cursor.execute("SELECT COUNT(*) as cnt FROM documents")
+        doc_count = cursor.fetchone()['cnt']
+        if doc_count > 0:
+            categories.add('Tài liệu')
+            
+        conn.close()
+    except Exception as e:
+        print(f"Error fetching categories: {e}")
+    
+    final_list = sorted(list(categories))
+    return CategoriesResponse(categories=final_list, count=len(final_list))
 

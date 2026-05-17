@@ -8,6 +8,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
 
+import logging
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 from web_admin.routes import news, upload
 from chatbot_api.routers import chat as chatbot_router
 
@@ -41,10 +46,39 @@ app.mount("/static", StaticFiles(directory="web_admin/static"), name="static")
 templates = Jinja2Templates(directory="web_admin/templates")
 
 # Include routers
+app.include_router(chatbot_router.router)  # /api/chat, /api/health, /api/categories
 app.include_router(news.router, tags=["News"])
 app.include_router(upload.router, tags=["Upload"])
-app.include_router(chatbot_router.router)  # /api/chat, /api/health
 
+
+@app.on_event("startup")
+async def startup_event():
+    """On startup — initialize services."""
+    import logging
+    import time
+    from starlette.concurrency import run_in_threadpool
+    from web_admin.utils.db import initialize_db
+    from chatbot_api.dependencies import get_chatbot_service, get_graph_search_service
+    
+    logger = logging.getLogger(__name__)
+    logger.info("Starting News Chatbot System (Knowledge Graph Version)...")
+    start_time = time.time()
+    
+    try:
+        # 1. Khởi tạo Database Schema
+        logger.info("[1/2] Initializing Database...")
+        await run_in_threadpool(initialize_db)
+        
+        # 2. Pre-load chatbot logic & Graph Search
+        logger.info("[2/2] Initializing Graph Search Service...")
+        await run_in_threadpool(get_graph_search_service)
+        await run_in_threadpool(get_chatbot_service)
+        
+        duration = time.time() - start_time
+        logger.info(f"✅ All services initialized successfully in {duration:.2f}s.")
+    except Exception as e:
+        logger.error(f"❌ Failed to initialize services: {e}")
+        # Không raise lỗi để app vẫn start được (cho phép sửa lỗi qua Web Admin nếu cần)
 
 @app.get("/health")
 async def health_check():

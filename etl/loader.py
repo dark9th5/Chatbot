@@ -6,14 +6,17 @@ import sys
 class DatabaseLoader:
     """Class chịu trách nhiệm Load dữ liệu vào MySQL"""
 
+    # Khởi tạo Database Loader và thiết lập bảng dữ liệu
     def __init__(self):
         self._init_database()
 
+    # Tạo kết nối đến cơ sở dữ liệu MySQL
     def _get_connection(self):
         """Tạo kết nối MySQL"""
         from pipeline.config import MYSQL_CONFIG
         return pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
 
+    # Tạo cấu trúc bảng articles nếu nó chưa tồn tại trong database
     def _init_database(self):
         """Khởi tạo bảng articles nếu chưa có"""
         try:
@@ -40,9 +43,10 @@ class DatabaseLoader:
             conn.commit()
             conn.close()
         except Exception as e:
-            print(f"✗ Database initialization error: {e}")
+            print(f"[ERROR] Database initialization error: {e}")
             sys.exit(1)
 
+    # Lưu danh sách các bài báo vào cơ sở dữ liệu (Bulk Insert)
     def save_articles(self, articles: List[Article]):
         """Lưu danh sách bài báo vào DB"""
         if not articles:
@@ -89,7 +93,7 @@ class DatabaseLoader:
             conn.commit()
             conn.close()
             
-            print(f"✓ Saved batch to DB: {inserted} new, {updated} updated")
+            print(f"[OK] Saved batch to DB: {inserted} new, {updated} updated")
             
         except Exception as e:
-            print(f"✗ Database save error: {e}")
+            print(f"[ERROR] Database save error: {e}")

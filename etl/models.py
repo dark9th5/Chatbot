@@ -13,6 +13,7 @@ class Article:
     source: str
     category: str
 
+    # Chuyển đổi đối tượng Article thành dictionary để dễ dàng xử lý (JSON/API)
     def to_dict(self):
         return {
             "title": self.title,

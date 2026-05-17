@@ -9,17 +9,20 @@ class TextRankSummarizer:
     Ý tưởng: Dựng đồ thị các câu, tính độ tương đồng bằng TF-IDF/Overlap, sau đó lặp PageRank.
     """
     
+    # Khởi tạo bộ tóm tắt văn bản với các tham số cho thuật toán PageRank
     def __init__(self, damping_factor: float = 0.85, max_iter: int = 50, tolerance: float = 1e-4):
         self.d = damping_factor
         self.max_iter = max_iter
         self.tolerance = tolerance
 
+    # Tách văn bản thành danh sách các câu
     def _split_sentences(self, text: str) -> List[str]:
         """Tách câu đơn giản bằng regex."""
         # Tách câu: chấm/hỏi/than theo sau bởi khoảng trắng hoặc cuối chuỗi
         sentences = re.split(r'(?<=[.!?])\s+', text)
         return [s.strip() for s in sentences if len(s.strip()) > 15] # Bỏ câu quá ngắn
 
+    # Tính toán độ tương đồng giữa hai câu dựa trên các từ chung
     def _calculate_similarity(self, s1: str, s2: str) -> float:
         """Tính điểm tương đồng giữa 2 câu bằng Word Overlap (Jaccard-like)."""
         words1 = set(s1.lower().split())
@@ -37,6 +40,7 @@ class TextRankSummarizer:
             
         return overlap / denominator
 
+    # Xây dựng ma trận tương đồng giữa tất cả các cặp câu
     def _build_similarity_matrix(self, sentences: List[str]) -> List[List[float]]:
         """Dựng ma trận kề (đồ thị) cho các câu."""
         n = len(sentences)
@@ -49,6 +53,7 @@ class TextRankSummarizer:
                     
         return matrix
 
+    # Thực hiện tóm tắt văn bản và lấy ra k câu quan trọng nhất
     def summarize(self, text: str, top_k: int = 3) -> str:
         """
         Thực thi thuật toán TextRank để rút trích top_k câu quan trọng nhất.

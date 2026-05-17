@@ -63,6 +63,7 @@
                     <td>{{ item.content_length }} ký tự</td>
                     <td>
                         <a href="/news/{{ item.id }}" class="btn btn-sm">Xem</a>
+                        <button onclick="deleteNews({{ item.id }})" class="btn btn-sm btn-danger" style="margin-left: 0.25rem;">Xóa</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -86,4 +87,29 @@
     </div>
     {% endif %}
 </div>
+
+<script>
+async function deleteNews(newsId) {
+    if (!confirm('Bạn có chắc chắn muốn xóa bài viết này và tất cả dữ liệu vector liên quan?')) {
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/news/${newsId}`, {
+            method: 'DELETE',
+        });
+        const data = await response.json();
+
+        if (data.success) {
+            alert('Đã xóa bài báo thành công!');
+            window.location.reload();
+        } else {
+            alert('Lỗi: ' + data.message);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Đã có lỗi xảy ra khi gọi API xóa.');
+    }
+}
+</script>
 {% endblock %}

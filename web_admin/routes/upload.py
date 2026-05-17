@@ -10,7 +10,7 @@ from fastapi.templating import Jinja2Templates
 
 from web_admin.utils.db import (
     save_document, get_all_documents, get_document_by_id,
-    get_db_connection
+    get_db_connection, delete_document
 )
 from web_admin.utils.file_processor import process_uploaded_file, get_file_info
 
@@ -25,11 +25,10 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
 
 def _process_document_for_chatbot(doc_id: int, filename: str, text: str):
     """
-    Tự động xử lý document thành nguồn dữ liệu cho chatbot.
-    Pipeline: Text → Article DB → Chunking → Vector Embedding → Qdrant
+    Tự động xử lý document thành nguồn dữ liệu cho chatbot (Graph Version).
+    Pipeline: Text → Article DB → Knowledge Graph Build
     """
-    from pipeline.chunking_vectorizer import semantic_chunking
-    from chatbot_api.dependencies import get_embedding_service, get_qdrant_service
+    from pipeline.knowledge_graph_builder import KnowledgeGraphBuilder
     import re
 
     conn = get_db_connection()
@@ -61,43 +60,17 @@ def _process_document_for_chatbot(doc_id: int, filename: str, text: str):
             conn.close()
             return False
 
-        # Bước 2: Chunking (Sử dụng Vietnamese Optimized Splitter)
-        chunks = semantic_chunking(text, chunk_size=500, chunk_overlap=100)
+        # Bước 2: Xây dựng Đồ thị tri thức (Knowledge Graph)
+        builder = KnowledgeGraphBuilder()
+        # Chạy build graph (script này tự động quét các bài báo mới bao gồm bài vừa thêm)
+        builder.build_graph()
+        builder.close()
 
-        if not chunks:
-            conn.close()
-            return False
-
-        # Bước 3: Vector Embedding
-        embedding_service = get_embedding_service()
-        embeddings = embedding_service.encode_batch(chunks)
-
-        # Bước 4: Chuẩn bị Metadata và lưu vào Qdrant
-        qdrant = get_qdrant_service()
-        
-        from datetime import date
-        today_str = date.today().strftime("%Y-%m-%d")
-        today_int = int(date.today().strftime("%Y%m%d"))
-        
-        metadatas = []
-        for chunk in chunks:
-            metadatas.append({
-                "article_id": article_id,
-                "title": filename,
-                "source": "Upload",
-                "link": f"upload://{filename}",
-                "published_date": today_str,
-                "pub_date_int": today_int,
-                "category": "Tài liệu"
-            })
-            
-        qdrant.add_chunks(chunks, embeddings, metadatas)
-
-        # Bước 5: Đánh dấu document đã xử lý trong bảng documents của Web Admin
+        # Bước 3: Đánh dấu document đã xử lý trong bảng documents của Web Admin
         cursor.execute('''
-            UPDATE documents SET processed = 1, chunks_count = %s
+            UPDATE documents SET processed = 1, chunks_count = 1
             WHERE id = %s
-        ''', (len(chunks), doc_id))
+        ''', (doc_id,))
         conn.commit()
         conn.close()
 
@@ -112,7 +85,7 @@ def _process_document_for_chatbot(doc_id: int, filename: str, text: str):
 
 
 @router.get("/upload", response_class=HTMLResponse)
-async def upload_page(request: Request):
+def upload_page(request: Request):
     """Trang upload file"""
     documents = get_all_documents(limit=20)
 
@@ -122,8 +95,10 @@ async def upload_page(request: Request):
     })
 
 
+from fastapi import BackgroundTasks
+
 @router.post("/upload")
-async def upload_file(file: UploadFile = File(...)):
+async def upload_file(background_tasks: BackgroundTasks, file: UploadFile = File(...)):
     """Xử lý upload file — Lưu + Trích xuất text + Tự động xử lý cho chatbot"""
 
     # Kiểm tra extension
@@ -181,17 +156,17 @@ async def upload_file(file: UploadFile = File(...)):
     try:
         doc_id = save_document(file.filename, extracted_text, file_type)
 
-        # Tự động xử lý cho chatbot (chunk + vectorize)
-        processed = _process_document_for_chatbot(doc_id, file.filename, extracted_text)
+        # Chạy xử lý cho chatbot trong nền để không làm treo Web Admin
+        background_tasks.add_task(_process_document_for_chatbot, doc_id, file.filename, extracted_text)
 
         return JSONResponse(content={
             "success": True,
-            "message": "File uploaded and processed successfully",
+            "message": "File đã được tải lên và đang được xử lý trong nền.",
             "document_id": doc_id,
             "filename": file.filename,
             "file_type": file_type,
             "text_length": len(extracted_text),
-            "chatbot_processed": processed,
+            "chatbot_processed": "pending",
             "preview": extracted_text[:500] + "..." if len(extracted_text) > 500 else extracted_text
         })
     except Exception as e:
@@ -202,7 +177,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @router.get("/documents", response_class=HTMLResponse)
-async def documents_list(request: Request):
+def documents_list(request: Request):
     """Danh sách documents đã upload"""
     documents = get_all_documents(limit=50)
 
@@ -213,7 +188,7 @@ async def documents_list(request: Request):
 
 
 @router.get("/documents/{doc_id}", response_class=HTMLResponse)
-async def document_detail(request: Request, doc_id: int):
+def document_detail(request: Request, doc_id: int):
     """Chi tiết document"""
     document = get_document_by_id(doc_id)
 
@@ -227,3 +202,23 @@ async def document_detail(request: Request, doc_id: int):
         "request": request,
         "document": document
     })
+
+
+@router.delete("/api/upload/{doc_id}")
+async def delete_document_endpoint(doc_id: int):
+    """API xóa tài liệu đã upload (Quan hệ đồ thị tự động xóa nhờ CASCADE)"""
+    # 1. Xóa trong MySQL và lấy tên file
+    filename = delete_document(doc_id)
+    
+    if not filename:
+        return JSONResponse(status_code=404, content={"success": False, "message": "Không tìm thấy tài liệu"})
+
+    # 3. Xóa file vật lý
+    try:
+        file_path = os.path.join(UPLOAD_DIR, filename)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+    except Exception as e:
+        print(f"Physical file delete error: {e}")
+
+    return JSONResponse(content={"success": True, "message": f"Đã xóa tài liệu '{filename}' thành công"})

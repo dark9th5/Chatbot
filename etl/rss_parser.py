@@ -11,6 +11,7 @@ class CustomRSSParser:
     Thay thế cho thư viện feedparser để tối ưu hiệu năng và RAM.
     """
 
+    # Phân tích nội dung RSS từ URL và trả về danh sách các đối tượng Article
     def parse(self, url: str, source_name: str, category: str) -> List[Article]:
         try:
             # 1. Fetch XML Content
@@ -67,6 +68,7 @@ class CustomRSSParser:
             print(f"✗ Error parsing RSS {url}: {e}")
             return []
 
+    # Loại bỏ các thẻ HTML rác khỏi văn bản tóm tắt
     def _clean_html(self, raw_html: str) -> str:
         """Loại bỏ thẻ HTML và giải mã các thực thể (entities)."""
         if not raw_html:
@@ -78,6 +80,7 @@ class CustomRSSParser:
         return html.unescape(cleantext).strip()
 
 
+    # Chuyển đổi định dạng ngày tháng từ RSS sang định dạng chuẩn YYYY-MM-DD
     def _parse_date(self, date_str: str) -> Optional[str]:
         """Parse chuẩn RFC 822 (example: 'Fri, 27 Aug 2021 08:00:00 +0700')"""
         if not date_str:

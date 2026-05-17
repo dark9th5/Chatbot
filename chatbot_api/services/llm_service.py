@@ -1,59 +1,26 @@
 """
 LLM Service — Abstract Layer for Large Language Models
-<<<<<<< HEAD
-Hỗ trợ chuyển đổi linh hoạt giữa Google Gemini (API) và Ollama (Local).
-=======
-Hỗ trợ chuyển đổi linh hoạt giữa Google Gemini (API), OpenAI, Ollama (Local), và llama.cpp (Local).
-
-Giai đoạn 1: Tách phụ thuộc Ollama + Thêm các provider thay thế
-- GeminiProvider: Google Gemini API
-- OpenAIProvider: OpenAI GPT API
-- LlamaCppProvider: Local inference với llama.cpp
-- OllamaProvider: Ollama local (deprecated, giữ cho backward compat)
-- FallbackLLMProvider: Fallback mechanism khi provider chính lỗi
->>>>>>> c1d95b9 (Initial commit)
+Hỗ trợ chuyển đổi linh hoạt giữa Groq và HuggingFace.
 """
 
 import os
 import abc
-<<<<<<< HEAD
-from typing import List, Optional
-import google.generativeai as genai
-import ollama
-=======
 import logging
 from typing import List, Optional
-import google.generativeai as genai
 
-try:
-    import ollama
-    OLLAMA_AVAILABLE = True
-except ImportError:
-    OLLAMA_AVAILABLE = False
-
-try:
-    import openai
-    OPENAI_AVAILABLE = True
-except ImportError:
-    OPENAI_AVAILABLE = False
-
-try:
-    from llama_cpp import Llama
-    LLAMA_CPP_AVAILABLE = True
-except ImportError:
-    LLAMA_CPP_AVAILABLE = False
-
+# Cấu hình logging
 logger = logging.getLogger(__name__)
->>>>>>> c1d95b9 (Initial commit)
 
 class LLMProvider(abc.ABC):
     """Abstract Base Class cho các LLM Provider"""
     
+    # Phương thức trừu tượng để sinh phản hồi từ ngữ cảnh và câu hỏi
     @abc.abstractmethod
     def generate_response(self, context: str, question: str) -> str:
         """Sinh câu trả lời từ ngữ cảnh và câu hỏi"""
         pass
     
+    # Thuộc tính trừu tượng trả về tên của nhà cung cấp LLM
     @property
     @abc.abstractmethod
     def provider_name(self) -> str:
@@ -61,24 +28,37 @@ class LLMProvider(abc.ABC):
         pass
 
 
-class GeminiProvider(LLMProvider):
-    """Provider sử dụng Google Gemini API"""
+class GroqProvider(LLMProvider):
+    """Provider sử dụng Groq API (Siêu nhanh)"""
     
-    def __init__(self, api_key: str, model_name: str = "gemini-pro"):
+    # Khởi tạo Groq Provider với API Key và tên model
+    def __init__(self, api_key: str, model_name: str = "llama-3.3-70b-versatile"):
         if not api_key:
-            raise ValueError("Gemini API Key is required")
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(model_name)
+            raise ValueError("Groq API Key is required")
+        try:
+            from groq import Groq
+            self.client = Groq(api_key=api_key)
+            self.model_name = model_name
+        except ImportError:
+            raise ImportError("Vui lòng cài đặt thư viện groq: pip install groq")
         
+    # Trả về tên nhà cung cấp Groq cùng với model đang dùng
     @property
     def provider_name(self) -> str:
-        return "Google Gemini API"
+        return f"Groq ({self.model_name})"
 
+    # Sinh câu trả lời bằng cách gọi API của Groq
     def generate_response(self, context: str, question: str) -> str:
-        prompt = f"""Dựa vào thông tin được cung cấp dưới đây, hãy trả lời câu hỏi một cách chi tiết, tự nhiên và chính xác bằng tiếng Việt.
-Nếu thông tin không có trong bài viết, hãy nói rõ là không tìm thấy thông tin.
+        prompt = f"""Bạn là một trợ lý ảo tin tức chuyên nghiệp.
+Nhiệm vụ: Dựa vào [NGỮ CẢNH] để trả lời [CÂU HỎI] một cách TRỰC DIỆN, ĐÚNG TRỌNG TÂM và KHÔNG THỪA THÃI.
 
-[THÔNG TIN NGỮ CẢNH]
+YÊU CẦU:
+1. Chỉ trả lời dựa trên thông tin có trong [NGỮ CẢNH].
+2. Nếu không có thông tin, hãy trả lời "Tôi không tìm thấy thông tin này trong bài báo".
+3. Đi thẳng vào câu trả lời, tuyệt đối không chào hỏi, không lặp lại câu hỏi, không thêm lời thoại râu ria.
+4. ĐỘ DÀI LINH HOẠT: Trả lời cô đọng nhất có thể. Tuy nhiên, nếu câu hỏi yêu cầu liệt kê hoặc giải thích chi tiết, hãy cung cấp đầy đủ thông tin từ ngữ cảnh (có thể dùng gạch đầu dòng để dễ đọc).
+
+[NGỮ CẢNH]
 {context}
 
 [CÂU HỎI]
@@ -87,160 +67,51 @@ Nếu thông tin không có trong bài viết, hãy nói rõ là không tìm th�
 TRẢ LỜI:"""
         
         try:
-            response = self.model.generate_content(prompt)
-            return response.text
-        except Exception as e:
-            return f"Lỗi khi gọi Gemini API: {str(e)}"
-
-
-<<<<<<< HEAD
-class OllamaProvider(LLMProvider):
-    """Provider sử dụng Ollama chạy Local"""
-    
-    def __init__(self, model_name: str = "qwen2.5:1.5b"):
-=======
-class OpenAIProvider(LLMProvider):
-    """Provider sử dụng OpenAI GPT API (GPT-4, GPT-3.5-turbo)"""
-    
-    def __init__(self, api_key: str, model_name: str = "gpt-3.5-turbo"):
-        if not OPENAI_AVAILABLE:
-            raise ImportError("openai package is not installed. Install with: pip install openai")
-        if not api_key:
-            raise ValueError("OpenAI API Key is required")
-        openai.api_key = api_key
-        self.model_name = model_name
-        
-    @property
-    def provider_name(self) -> str:
-        return f"OpenAI {self.model_name}"
-
-    def generate_response(self, context: str, question: str) -> str:
-        prompt = f"""Dựa vào thông tin được cung cấp dưới đây, hãy trả lời câu hỏi một cách chi tiết, tự nhiên và chính xác bằng tiếng Việt.
-Nếu thông tin không có trong bài viết, hãy nói rõ là không tìm thấy thông tin.
-
-[THÔNG TIN NGỮ CẢNH]
-{context}
-
-[CÂU HỎI]
-{question}
-
-TRẢ LỜI:"""
-        
-        try:
-            response = openai.ChatCompletion.create(
+            completion = self.client.chat.completions.create(
                 model=self.model_name,
-                messages=[{
-                    'role': 'system',
-                    'content': 'Bạn là một trợ lý thông minh và hữu ích. Trả lời bằng tiếng Việt.'
-                }, {
-                    'role': 'user',
-                    'content': prompt
-                }],
+                messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                max_tokens=512
+                max_tokens=1024,
             )
-            return response['choices'][0]['message']['content']
+            return completion.choices[0].message.content
         except Exception as e:
-            return f"Lỗi khi gọi OpenAI API: {str(e)}"
+            logger.error(f"Groq API Error: {str(e)}")
+            return f"Lỗi khi gọi Groq API: {str(e)}"
 
 
-class LlamaCppProvider(LLMProvider):
-    """Provider sử dụng llama.cpp cho local inference với GGUF models"""
+class HuggingFaceProvider(LLMProvider):
+    """Provider sử dụng Hugging Face Inference API (Miễn phí)"""
     
-    def __init__(self, model_path: str, n_gpu_layers: int = -1, n_ctx: int = 2048):
-        """
-        Args:
-            model_path: Đường dẫn đến tệp GGUF model (ví dụ: models/qwen2.5-1.5b.gguf)
-            n_gpu_layers: Số layers chạy trên GPU (-1 = all available)
-            n_ctx: Context window size (giảm để tiết kiệm RAM)
-        """
-        if not LLAMA_CPP_AVAILABLE:
-            raise ImportError("llama-cpp-python package is not installed. Install with: pip install llama-cpp-python")
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"Model file not found: {model_path}")
-        
+    # Khởi tạo HuggingFace Provider với API Key và ID model
+    def __init__(self, api_key: str, model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"):
+        self.api_key = api_key
+        self.model_id = model_id
         try:
-            self.model = Llama(
-                model_path=model_path,
-                n_gpu_layers=n_gpu_layers,
-                n_ctx=n_ctx,
-                verbose=False
-            )
-        except Exception as e:
-            raise RuntimeError(f"Failed to load llama.cpp model: {str(e)}")
+            from huggingface_hub import InferenceClient
+            self.client = InferenceClient(model=model_id, token=api_key)
+        except ImportError:
+            raise ImportError("Vui lòng cài đặt: pip install huggingface_hub")
         
+    # Trả về tên nhà cung cấp HuggingFace cùng với model ID
     @property
     def provider_name(self) -> str:
-        return "llama.cpp (Local GGUF)"
+        return f"HuggingFace ({self.model_id})"
 
+    # Sinh câu trả lời bằng cách gọi Inference API của HuggingFace
     def generate_response(self, context: str, question: str) -> str:
-        prompt = f"""Trả lời bằng tiếng Việt dựa trên thông tin:
-
-{context}
-
-Hỏi: {question}
-Đáp:"""
-        
+        prompt = f"Context: {context}\n\nQuestion: {question}\n\nTask: Answer directly and strictly based on the context in Vietnamese. Focus on the core answer with zero fluff. Be as concise as possible, but if detailed explanation or listing is requested, provide it clearly.\nAnswer:"
         try:
-            response = self.model(
-                prompt,
-                max_tokens=256,
-                temperature=0.3,
-                top_p=0.9,
-                stop=["Hỏi:"]
-            )
-            return response['choices'][0]['text'].strip()
+            response = self.client.text_generation(prompt, max_new_tokens=512, temperature=0.3)
+            return response
         except Exception as e:
-            return f"Lỗi khi gọi llama.cpp: {str(e)}"
+            return f"Lỗi HuggingFace: {str(e)}"
 
-
-class OllamaProvider(LLMProvider):
-    """Provider sử dụng Ollama chạy Local (Deprecated - dùng LlamaCppProvider thay thế)"""
-    
-    def __init__(self, model_name: str = "qwen2.5:1.5b"):
-        if not OLLAMA_AVAILABLE:
-            raise ImportError("ollama package is not installed. Install with: pip install ollama")
->>>>>>> c1d95b9 (Initial commit)
-        self.model_name = model_name
-        
-    @property
-    def provider_name(self) -> str:
-        return f"Ollama Local ({self.model_name})"
-
-    def generate_response(self, context: str, question: str) -> str:
-        # Prompt ngắn gọn cho model nhỏ
-        prompt = f"""Trả lời ngắn gọn bằng tiếng Việt dựa trên văn bản:
-
-{context}
-
-Hỏi: {question}
-Đáp:"""
-        
-        try:
-            response = ollama.chat(
-                model=self.model_name,
-                messages=[{
-                    'role': 'user',
-                    'content': prompt,
-                }],
-                options={
-                    'num_predict': 256,     # Giới hạn output tokens
-                    'temperature': 0.3,     # Giảm randomness -> nhanh hơn
-                    'num_ctx': 2048,        # Giảm context window
-                }
-            )
-            return response['message']['content']
-        except Exception as e:
-<<<<<<< HEAD
-            return f"Lỗi khi gọi Ollama: {str(e)}. Hãy chắc chắn Ollama đang chạy."
-=======
-            logger.error(f"Ollama error: {str(e)}")
-            return f"Lỗi khi gọi Ollama: {str(e)}. Hãy chắc chắn Ollama đang chạy tại localhost:11434"
 
 
 class FallbackLLMProvider(LLMProvider):
     """Provider với fallback mechanism - cố gắng sử dụng provider chính, nếu lỗi thì dùng backup"""
     
+    # Khởi tạo bộ Provider hỗ trợ cơ chế dự phòng (primary & fallback)
     def __init__(self, primary: LLMProvider, fallback: Optional[LLMProvider] = None):
         """
         Args:
@@ -250,11 +121,13 @@ class FallbackLLMProvider(LLMProvider):
         self.primary = primary
         self.fallback = fallback
         
+    # Trả về tên của cả provider chính và provider dự phòng
     @property
     def provider_name(self) -> str:
         fallback_info = f" + Fallback({self.fallback.provider_name})" if self.fallback else ""
         return f"{self.primary.provider_name}{fallback_info}"
 
+    # Thử sinh câu trả lời bằng provider chính, nếu lỗi sẽ dùng fallback
     def generate_response(self, context: str, question: str) -> str:
         """Thử primary trước, nếu lỗi thì chuyển sang fallback"""
         try:
@@ -276,38 +149,21 @@ class FallbackLLMProvider(LLMProvider):
                 return f"Cả hai provider đều lỗi. Primary: {self.primary.provider_name}, Fallback: {self.fallback.provider_name if self.fallback else 'None'}"
         
         return response  # Trả lỗi từ primary nếu không có fallback
->>>>>>> c1d95b9 (Initial commit)
 
 
 class LLMService:
     """Wrapper Service để sử dụng trong ChatbotService"""
     
+    # Khởi tạo LLM Service wrapper với một provider cụ thể
     def __init__(self, provider: LLMProvider):
         self.provider = provider
-<<<<<<< HEAD
-        
-    def generate_answer(self, context: str, question: str) -> str:
-        return self.provider.generate_response(context, question)
-=======
         logger.info(f"LLMService initialized with provider: {provider.provider_name}")
         
+    # Phương thức chính để sinh câu trả lời thông qua provider đã cấu hình
     def generate_answer(self, context: str, question: str) -> str:
-        """
-        Sinh câu trả lời từ context và question
-        
-        Args:
-            context: Văn bản ngữ cảnh từ RAG
-            question: Câu hỏi người dùng
-            
-        Returns:
-            Câu trả lời từ LLM
-        """
+        """Sinh câu trả lời từ context và câu hỏi"""
         try:
-            logger.debug(f"Generating answer with {self.provider.provider_name}")
-            response = self.provider.generate_response(context, question)
-            logger.debug(f"Answer generated successfully (length: {len(response)})")
-            return response
+            return self.provider.generate_response(context, question)
         except Exception as e:
             logger.error(f"Error generating answer: {str(e)}")
             return f"Lỗi khi sinh câu trả lời: {str(e)}"
->>>>>>> c1d95b9 (Initial commit)

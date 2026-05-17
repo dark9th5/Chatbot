@@ -7,9 +7,11 @@ class QueryExpansionService:
     Mục đích: Viết lại câu hỏi của người dùng để rõ nghĩa hơn và bao gồm các từ khóa liên quan.
     """
 
+    # Khởi tạo dịch vụ mở rộng truy vấn với LLM Service
     def __init__(self, llm_service: LLMService):
         self.llm_service = llm_service
 
+    # Viết lại câu hỏi gốc để rõ nghĩa và hiệu quả hơn khi tìm kiếm
     def expand_query(self, original_query: str, timeout_seconds: float = 4.0) -> str:
         """
         Mở rộng câu hỏi gốc.

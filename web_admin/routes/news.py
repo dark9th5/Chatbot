@@ -10,8 +10,12 @@ import threading
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime
 
-from web_admin.utils.db import get_all_news, get_news_by_id, search_news, get_statistics
+from web_admin.utils.db import (
+    get_all_news, get_news_by_id, search_news, get_statistics,
+    delete_article, get_categories_list
+)
 from chatbot_api.services.chatbot_service import ChatbotService
+from chatbot_api.dependencies import get_graph_search_service
 
 
 router = APIRouter()
@@ -23,7 +27,7 @@ scheduler.start()
 
 
 @router.get("/", response_class=HTMLResponse)
-async def index(request: Request):
+def index(request: Request):
     """Trang chủ - Dashboard"""
     stats = get_statistics()
     news, _ = get_all_news(limit=5)  # Lấy 5 tin mới nhất
@@ -35,8 +39,10 @@ async def index(request: Request):
     })
 
 
+
+
 @router.get("/news", response_class=HTMLResponse)
-async def news_list(
+def news_list(
     request: Request,
     page: int = Query(1, ge=1),
     q: str = Query(None),
@@ -69,7 +75,7 @@ async def news_list(
 
 
 @router.get("/news/{news_id}", response_class=HTMLResponse)
-async def news_detail(request: Request, news_id: int):
+def news_detail(request: Request, news_id: int):
     """Chi tiết một tin tức"""
     news = get_news_by_id(news_id)
 
@@ -95,20 +101,18 @@ def _run_rss_refresh():
         print(f"\n[{datetime.now()}] Starting RSS refresh...")
         
         from etl.crawler import AsyncNewsCrawler
-        from pipeline.chunking_vectorizer import process_all_articles
+        from pipeline.knowledge_graph_builder import KnowledgeGraphBuilder
 
         # Bước 1: Thu thập tin tức mới từ RSS (Dùng ETL mới)
         crawler = AsyncNewsCrawler()
-        new_count = crawler.run() # Crawler tự động chạy đa luồng và lưu DB
+        new_count = crawler.run() 
 
-        # Bước 2: Re-chunk & vectorize toàn bộ (sẽ skip articles đã có chunks)
-        process_all_articles()
+        # Bước 2: Xây dựng Đồ thị tri thức (Knowledge Graph)
+        builder = KnowledgeGraphBuilder()
+        builder.build_graph()
+        builder.close()
         
-        # Bước 3: Cache Invalidation (Không cần thiết với Qdrant vì query trực tiếp)
-        # ChatbotService dùng Qdrant nên dữ liệu sẽ có ngay sau khi vectorization xong.
-        print(f"[{datetime.now()}] RSS refresh completed.")
-
-        print(f"[{datetime.now()}] RSS refresh completed: {new_count} new\n")
+        print(f"[{datetime.now()}] RSS refresh completed: {new_count} new articles added to Knowledge Graph.\n")
 
         return {"new_articles": new_count}
     except Exception as e:
@@ -155,3 +159,19 @@ def _run_rss_refresh_task():
         _run_rss_refresh()
     except Exception as e:
         print(f"Background Refresh Error: {e}")
+
+
+# Removed duplicate categories endpoint to avoid conflict with chatbot API.
+# The chatbot API version in chatbot_api/routers/chat.py will handle this.
+
+
+@router.delete("/api/news/{news_id}")
+async def delete_news_endpoint(news_id: int):
+    """API xóa bài báo (Quan hệ đồ thị tự động xóa nhờ CASCADE)"""
+    # Xóa trong MySQL
+    success = delete_article(news_id)
+    
+    if success:
+        return JSONResponse(content={"success": True, "message": "Đã xóa bài báo thành công"})
+    else:
+        return JSONResponse(status_code=404, content={"success": False, "message": "Không tìm thấy bài báo hoặc lỗi khi xóa"})

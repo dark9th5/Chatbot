@@ -63,7 +63,8 @@ class AsyncNewsCrawler:
         }
     }
 
-    def __init__(self, max_workers: int = 5):
+    # Khởi tạo Crawler với số lượng luồng worker mặc định là 2
+    def __init__(self, max_workers: int = 2):
         self.max_workers = max_workers
         self.parser = CustomRSSParser()
         self.loader = DatabaseLoader()
@@ -72,6 +73,7 @@ class AsyncNewsCrawler:
         self.deduplicator = JaccardDeduplicator(threshold=0.85)
         self.summarizer = TextRankSummarizer()
 
+    # Xử lý lấy nội dung chi tiết của một bài báo (chạy trong thread)
     def process_article_content(self, article: Article) -> Article:
         """Task chạy trong thread: Lấy nội dung đầy đủ"""
         try:
@@ -86,7 +88,8 @@ class AsyncNewsCrawler:
             print(f"  [Error] Error extracting content for {article.link}: {e}")
         return article
 
-    def crawl_feed(self, url: str, source_name: str, category: str, limit: int = 10) -> List[Article]:
+    # Thu thập tin tức từ một link RSS feed cụ thể
+    def crawl_feed(self, url: str, source_name: str, category: str, limit: int = 50) -> List[Article]:
         """Crawl một RSS feed"""
         print(f"[RSS] Fetching RSS: {url}...")
         
@@ -121,6 +124,7 @@ class AsyncNewsCrawler:
                 
         return final_articles
 
+    # Khởi chạy toàn bộ quy trình thu thập tin tức từ tất cả các nguồn
     def run(self):
         """Chạy toàn bộ quy trình Crawl"""
         print(f"[Crawler] Starting Async Crawler (Workers={self.max_workers})...")
@@ -146,5 +150,6 @@ class AsyncNewsCrawler:
         print("="*60)
         return total_collected
 
+    # Đóng bộ thực thi luồng khi hoàn tất
     def shutdown(self):
         self.executor.shutdown(wait=True)

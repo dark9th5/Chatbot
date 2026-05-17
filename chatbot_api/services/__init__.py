@@ -1,2 +1,2 @@
-from chatbot_api.services.embedding_service import EmbeddingService
 from chatbot_api.services.chatbot_service import ChatbotService
+from chatbot_api.services.graph_search_service import GraphSearchService

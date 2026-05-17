@@ -23,20 +23,17 @@ apscheduler==3.10.4
 underthesea
 sentence-transformers
 
-<<<<<<< HEAD
-# Stage 3: LLM Generation (RAG)
-google-generativeai
-ollama
-=======
 # Stage 3: LLM Generation (RAG) - UPDATED PHASE 1
 # Ollama (deprecated, kept for backward compatibility)
 ollama
 
 # NEW PROVIDERS - Choose one or more
-google-generativeai  # Google Gemini API
-openai>=1.0.0       # OpenAI GPT API
-llama-cpp-python    # Local inference with GGUF models
+# google-generativeai  # Google Gemini API
+# openai>=1.0.0       # OpenAI GPT API
+# llama-cpp-python    # Local inference with GGUF models
 
 # Optional: Groq API (fast LLM inference)
 groq
->>>>>>> c1d95b9 (Initial commit)
+python-dotenv
+huggingface_hub
+qdrant-client

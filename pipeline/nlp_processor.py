@@ -8,11 +8,13 @@ import pymysql
 import unicodedata
 from typing import Optional, List, Dict
 
-from underthesea import word_tokenize
+# Loại bỏ underthesea, thay bằng thuật toán tách từ custom
+# from underthesea import word_tokenize # REMOVED AI LIBRARY
 from bs4 import BeautifulSoup
 from pipeline.config import MYSQL_CONFIG
 
 
+# Tạo kết nối đến cơ sở dữ liệu MySQL dựa trên cấu hình đã thiết lập
 def _get_connection():
     return pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
 
@@ -66,6 +68,7 @@ VIETNAMESE_STOP_WORDS = {
 
 import os
 
+# Tải danh sách các từ dừng (stop words) tùy chỉnh từ file văn bản
 def load_custom_stopwords():
     try:
         base_dir = os.path.dirname(os.path.dirname(__file__))
@@ -77,14 +80,62 @@ def load_custom_stopwords():
 
 CUSTOM_STOP_WORDS = load_custom_stopwords()
 
+
+# ============================================================
+# THUẬT TOÁN TÁCH TỪ CUSTOM (LONGEST MATCHING) - 100% TỰ CODE
+# ============================================================
+
+class CustomVietnameseTokenizer:
+    """
+    Bộ tách từ tiếng Việt tự code dùng thuật toán Khớp dài nhất (MaxMatch).
+    Không dùng AI, không dùng thư viện bên thứ 3.
+    """
+    def __init__(self):
+        # Từ điển các từ ghép phổ biến (Có thể mở rộng thêm)
+        self.dictionary = {
+            "học sinh", "sinh viên", "giáo viên", "công nghệ", "thông tin",
+            "kinh tế", "việt nam", "thế giới", "thời tiết", "dự báo",
+            "trí tuệ", "nhân tạo", "xe hơi", "ô tô", "giá vàng", "bất động sản",
+            "thành phố", "hà nội", "tp.hcm", "sài gòn", "đà nẵng"
+        }
+        # Tự động thêm các từ từ stop words vào từ điển để tách chính xác
+        for word in VIETNAMESE_STOP_WORDS:
+            if "_" in word:
+                self.dictionary.add(word.replace("_", " "))
+
+    def tokenize(self, text: str) -> List[str]:
+        """Thuật toán MaxMatch tách từ."""
+        text = text.lower().strip()
+        words = text.split()
+        result = []
+        i = 0
+        while i < len(words):
+            found = False
+            # Thử khớp từ dài nhất (tối đa 3 âm tiết)
+            for length in range(3, 1, -1):
+                if i + length <= len(words):
+                    phrase = " ".join(words[i:i+length])
+                    if phrase in self.dictionary:
+                        result.append(phrase.replace(" ", "_"))
+                        i += length
+                        found = True
+                        break
+            if not found:
+                result.append(words[i])
+                i += 1
+        return result
+
+_tokenizer = CustomVietnameseTokenizer()
+
+# Làm sạch câu hỏi truy vấn bằng cách loại bỏ các từ dừng không cần thiết
 def clean_query(query: str) -> str:
-    """Làm sạch câu hỏi: Xóa stopwords thừa để tăng độ chính xác tìm kiếm từ khóa."""
+    """Làm sạch câu hỏi: Xóa stopwords thừa (100% Custom Code)."""
     if not query:
         return ""
     
-    # Chuẩn hóa và tách từ bằng underthesea
     query = normalize_unicode(query).lower()
-    words = word_tokenize(query) # Trả về list các từ (có thể chứa dấu gạch dưới _ hoặc dấu cách tùy format)
+    # Dùng tokenizer tự code thay cho underthesea
+    words = _tokenizer.tokenize(query)
     
     # Lọc stop words
     cleaned = [w.replace('_', ' ') for w in words if w.lower().replace(' ', '_') not in CUSTOM_STOP_WORDS]
@@ -92,66 +143,14 @@ def clean_query(query: str) -> str:
     text = " ".join(cleaned)
     return re.sub(r'\s+', ' ', text).strip()
 
-
-
-# ============================================================
-# HÀM TIỀN XỬ LÝ VĂN BẢN
-# ============================================================
-
-def normalize_unicode(text: str) -> str:
-    """Chuẩn hóa Unicode về dạng NFC"""
-    return unicodedata.normalize('NFC', text)
-
-
-def remove_html_tags(text: str) -> str:
-    """Loại bỏ tất cả thẻ HTML"""
-    soup = BeautifulSoup(text, 'html.parser')
-    return soup.get_text(separator=' ', strip=True)
-
-
-def remove_emoji(text: str) -> str:
-    """Loại bỏ emoji và ký tự đặc biệt Unicode"""
-    emoji_pattern = re.compile(
-        "["
-        "\U0001F600-\U0001F64F"  # Emoticons
-        "\U0001F300-\U0001F5FF"  # Symbols & Pictographs
-        "\U0001F680-\U0001F6FF"  # Transport & Map
-        "\U0001F1E0-\U0001F1FF"  # Flags
-        "\U00002702-\U000027B0"  # Dingbats
-        "\U000024C2-\U0001F251"  # Enclosed characters
-        "\U0001f926-\U0001f937"
-        "\U00010000-\U0010ffff"
-        "]+",
-        flags=re.UNICODE
-    )
-    return emoji_pattern.sub('', text)
-
-
-def remove_special_characters(text: str) -> str:
-    """Loại bỏ ký tự đặc biệt nhưng giữ lại tiếng Việt và dấu câu cơ bản"""
-    # Giữ lại: chữ cái (bao gồm tiếng Việt), số, dấu câu cơ bản, khoảng trắng
-    text = re.sub(r'[^\w\s.,;:!?\-()àáảãạăắằẳẵặâấầẩẫậèéẻẽẹêếềểễệìíỉĩịòóỏõọôốồổỗộơớờởỡợùúủũụưứừửữựỳýỷỹỵđÀÁẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬÈÉẺẼẸÊẾỀỂỄỆÌÍỈĨỊÒÓỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢÙÚỦŨỤƯỨỪỬỮỰỲÝỶỸỴĐ]', ' ', text)
-    # Loại bỏ khoảng trắng thừa
-    text = re.sub(r'\s+', ' ', text).strip()
-    return text
-
-
-def remove_urls(text: str) -> str:
-    """Loại bỏ các URL"""
-    text = re.sub(r'https?://\S+', '', text)
-    text = re.sub(r'www\.\S+', '', text)
-    return text
-
-
+# Tách các từ trong câu tiếng Việt sử dụng thuật toán Custom
 def word_segment(text: str) -> str:
-    """Tách từ tiếng Việt sử dụng Underthesea"""
-    try:
-        return word_tokenize(text, format='text')
-    except Exception as e:
-        print(f"  ⚠ Word segmentation error: {e}")
-        return text
+    """Tách từ tiếng Việt bằng thuật toán MaxMatch tự viết."""
+    words = _tokenizer.tokenize(text)
+    return " ".join(words)
 
 
+# Loại bỏ các từ dừng phổ biến trong tiếng Việt khỏi đoạn văn bản
 def remove_stopwords(text: str, stop_words: set = None) -> str:
     """Loại bỏ stop words tiếng Việt"""
     if stop_words is None:
@@ -162,6 +161,7 @@ def remove_stopwords(text: str, stop_words: set = None) -> str:
     return ' '.join(filtered)
 
 
+# Hàm tổng hợp thực hiện toàn bộ các bước làm sạch văn bản
 def clean_text(text: str, remove_stops: bool = True) -> Optional[str]:
     """
     Hàm chính: Tiền xử lý toàn diện văn bản tiếng Việt
@@ -220,6 +220,7 @@ def clean_text(text: str, remove_stops: bool = True) -> Optional[str]:
 # XỬ LÝ DỮ LIỆU TỪ DATABASE
 # ============================================================
 
+# Thêm cột mới vào bảng trong MySQL để lưu nội dung đã làm sạch
 def add_cleaned_column(db_path: str = None):
     """Thêm cột cleaned_content vào bảng articles nếu chưa có"""
     conn = _get_connection()
@@ -235,6 +236,7 @@ def add_cleaned_column(db_path: str = None):
     conn.close()
 
 
+# Duyệt qua và làm sạch nội dung của tất cả các bài báo trong database
 def process_all_articles(db_path: str = None):
     """
     Xử lý toàn bộ bài báo trong database
@@ -300,6 +302,7 @@ def process_all_articles(db_path: str = None):
     print("=" * 60)
 
 
+# Hiển thị kết quả sau khi đã làm sạch để kiểm tra thủ công
 def preview_results(db_path: str = None, limit: int = 3):
     """Xem trước kết quả tiền xử lý"""
     conn = _get_connection()
@@ -334,6 +337,7 @@ def preview_results(db_path: str = None, limit: int = 3):
 # MAIN
 # ============================================================
 
+# Hàm khởi chạy chính của tiến trình tiền xử lý NLP
 def main():
     """Hàm chính"""
     print("\n🤖 NLP Processor - Tiền xử lý văn bản tiếng Việt")
