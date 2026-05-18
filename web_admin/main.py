@@ -13,7 +13,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from web_admin.routes import news, upload
+from web_admin.routes import news
 from chatbot_api.routers import chat as chatbot_router
 
 
@@ -48,7 +48,6 @@ templates = Jinja2Templates(directory="web_admin/templates")
 # Include routers
 app.include_router(chatbot_router.router)  # /api/chat, /api/health, /api/categories
 app.include_router(news.router, tags=["News"])
-app.include_router(upload.router, tags=["Upload"])
 
 
 @app.on_event("startup")
@@ -103,6 +102,22 @@ async def _debug_env():
         "app_state_public_base_url": app.state.public_base_url,
         "env_PUBLIC_BASE_URL": os.getenv("PUBLIC_BASE_URL")
     }
+
+
+@app.get("/_debug_graph_types")
+async def _debug_graph_types():
+    """Return counts of entity types in graph_entities for debugging."""
+    try:
+        import pymysql
+        from pipeline.config import MYSQL_CONFIG
+        conn = pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+        cur = conn.cursor()
+        cur.execute("SELECT type, COUNT(*) as c FROM graph_entities GROUP BY type ORDER BY c DESC")
+        rows = cur.fetchall()
+        conn.close()
+        return {r['type']: r['c'] for r in rows}
+    except Exception as e:
+        return {"error": str(e)}
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("web_admin.main:app", host="0.0.0.0", port=8000, reload=True)

@@ -17,9 +17,34 @@ from pipeline.config import MYSQL_CONFIG
 from etl.ner_extractor import NERExtractor
 
 class KnowledgeGraphBuilder:
+    GRAPH_INDEX_TYPES = set(NERExtractor.TYPE_ORDER) - NERExtractor.WEAK_SIGNAL_TYPES
+
     def __init__(self):
         self.ner = NERExtractor()
         self.conn = pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
+
+    def _check_graph_entities_schema(self):
+        """
+        Check `graph_entities.type` column for restrictive ENUM definitions and
+        print a recommended ALTER TABLE statement if it's too narrow.
+        """
+        try:
+            cursor = self._get_cursor()
+            cursor.execute(
+                """
+                SELECT COLUMN_TYPE, DATA_TYPE
+                FROM INFORMATION_SCHEMA.COLUMNS
+                WHERE TABLE_SCHEMA = %s AND TABLE_NAME = 'graph_entities' AND COLUMN_NAME = 'type'
+                """,
+                (MYSQL_CONFIG.get('db'),),
+            )
+            row = cursor.fetchone()
+            if row and row.get('COLUMN_TYPE') and 'enum' in row.get('COLUMN_TYPE').lower():
+                print("[Warning] `graph_entities.type` is an ENUM. This may limit stored entity types.")
+                print("Recommended SQL to widen the column:")
+                print("ALTER TABLE graph_entities MODIFY COLUMN `type` VARCHAR(50) NOT NULL;")
+        except Exception as e:
+            print(f"[Info] Could not check graph_entities schema: {e}")
 
     def _get_cursor(self):
         if not self.conn.open:
@@ -32,6 +57,8 @@ class KnowledgeGraphBuilder:
         print("=" * 60)
         
         cursor = self._get_cursor()
+        # Check schema compatibility early and warn if `type` column is restrictive.
+        self._check_graph_entities_schema()
         
         # 1. Lấy bài báo chưa được đánh index đồ thị (Có thể tối ưu bằng flag sau)
         cursor.execute("SELECT id, title, content FROM articles WHERE content IS NOT NULL")
@@ -40,6 +67,7 @@ class KnowledgeGraphBuilder:
         print(f"[Info] Đang xử lý {len(articles)} bài báo...")
         
         total_entities_found = 0
+        inserted_type_counts = {}
         start_time = time.time()
 
         for idx, article in enumerate(articles, 1):
@@ -53,6 +81,8 @@ class KnowledgeGraphBuilder:
             # Gom tất cả các loại thực thể lại thành một tập hợp duy nhất
             unique_entities = set()
             for entity_type, names in entities_dict.items():
+                if entity_type not in self.GRAPH_INDEX_TYPES:
+                    continue
                 for name in names:
                     # Chuẩn hóa tên: viết thường để đồng nhất (hoặc giữ nguyên nếu muốn phân biệt)
                     name_clean = name.strip().lower()
@@ -66,10 +96,21 @@ class KnowledgeGraphBuilder:
                     "INSERT IGNORE INTO graph_entities (name, type) VALUES (%s, %s)",
                     (name, e_type)
                 )
+                inserted_type_counts[e_type] = inserted_type_counts.get(e_type, 0) + 1
                 
                 # 3.2. Lấy ID của entity
-                cursor.execute("SELECT id FROM graph_entities WHERE name = %s", (name,))
-                entity_id = cursor.fetchone()['id']
+                cursor.execute(
+                    "SELECT id FROM graph_entities WHERE name = %s AND type = %s LIMIT 1",
+                    (name, e_type),
+                )
+                entity_row = cursor.fetchone()
+                if not entity_row:
+                    # If not found, try to select by name+type was not present —
+                    # in new schema we expect (name,type) uniqueness; attempt INSERT above
+                    # should have created the row. If still missing, log and skip.
+                    print(f"[GraphBuilder] Warning: entity not found after insert: {name} ({e_type})")
+                    continue
+                entity_id = entity_row['id']
                 
                 # 3.3. Tạo mối liên kết (Edge)
                 cursor.execute(
@@ -89,6 +130,11 @@ class KnowledgeGraphBuilder:
         print("--- KẾT QUẢ XÂY DỰNG ĐỒ THỊ ---")
         print(f"  Tổng số bài báo:   {len(articles)}")
         print(f"  Thực thể tìm thấy: {total_entities_found}")
+        # Show a breakdown of inserted entity types to help diagnose DB mapping
+        if inserted_type_counts:
+            print("  Phân bố loại thực thể (tên loại: số lượng insert attempts):")
+            for k, v in sorted(inserted_type_counts.items(), key=lambda x: -x[1]):
+                print(f"    {k}: {v}")
         print(f"  Thời gian chạy:    {duration:.2f}s")
         print("=" * 60)
 

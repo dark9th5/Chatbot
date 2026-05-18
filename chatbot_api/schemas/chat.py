@@ -4,7 +4,7 @@ Validate và serialize dữ liệu request/response cho Chatbot API
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import date
 
 
@@ -23,6 +23,10 @@ class ChatRequest(BaseModel):
         le=10,
         description="Số kết quả trả về"
     )
+    data_source: Literal["news"] = Field(
+        default="news",
+        description="Nguồn dữ liệu: chỉ hỗ trợ 'news' (bài báo đã cào)"
+    )
     category: Optional[str] = Field(
         default=None,
         description="Lọc theo danh mục tin tức (VD: Thời sự, Kinh doanh, Giải trí, etc). None = tất cả danh mục"
@@ -35,6 +39,11 @@ class ChatRequest(BaseModel):
         default=None,
         description="Lọc tin tức đến ngày này (YYYY-MM-DD). None = hôm nay"
     )
+    conversation_context: Optional[str] = Field(
+        default=None,
+        max_length=500,
+        description="Câu hỏi trước đó cần giữ lại khi người dùng đang trả lời câu hỏi làm rõ"
+    )
 
 
 class SearchResult(BaseModel):
@@ -46,15 +55,19 @@ class SearchResult(BaseModel):
     article_title: str = Field(description="Tiêu đề bài viết nguồn")
     article_source: str = Field(description="Nguồn báo (VnExpress, Dân Trí)")
     article_link: str = Field(default="", description="Link bài viết gốc")
+    published_date: Optional[date] = Field(default=None, description="Ngày xuất bản của nguồn")
 
 
 class ChatResponse(BaseModel):
     """Response body cho endpoint /api/chat"""
     question: str = Field(description="Câu hỏi gốc")
     answer: str = Field(description="Câu trả lời tổng hợp")
-    confidence: float = Field(description="Độ tin cậy (0-1)")
     sources: List[SearchResult] = Field(description="Danh sách nguồn trích dẫn")
     total_chunks_searched: int = Field(description="Tổng số chunks đã tìm kiếm")
+    needs_clarification: bool = Field(
+        default=False,
+        description="Có cần giữ ngữ cảnh để người dùng trả lời tiếp hay không"
+    )
 
 
 class HealthResponse(BaseModel):

@@ -82,6 +82,75 @@ CUSTOM_STOP_WORDS = load_custom_stopwords()
 
 
 # ============================================================
+# CÁC HÀM TIỀN XỬ LÝ VÀ CHUẨN HÓA VĂN BẢN (100% CUSTOM CODE)
+# ============================================================
+
+def normalize_unicode(text: str) -> str:
+    """Chuẩn hóa Unicode sang dạng NFC."""
+    if not text:
+        return ""
+    return unicodedata.normalize("NFC", text)
+
+
+def remove_urls(text: str) -> str:
+    """Loại bỏ các đường dẫn URL khỏi văn bản."""
+    if not text:
+        return ""
+    # Mẫu regex cho URL phổ biến
+    url_pattern = re.compile(r'https?://\S+|www\.\S+', re.IGNORECASE)
+    return url_pattern.sub('', text)
+
+
+def remove_html_tags(text: str) -> str:
+    """Loại bỏ các thẻ HTML rác bằng BeautifulSoup."""
+    if not text:
+        return ""
+    try:
+        soup = BeautifulSoup(text, "html.parser")
+        return soup.get_text()
+    except Exception:
+        # Fallback bằng regex nếu BeautifulSoup gặp lỗi
+        return re.sub(r'<[^>]*>', '', text)
+
+
+def remove_emoji(text: str) -> str:
+    """Loại bỏ các ký tự emoji và ký tự đặc biệt phi chuẩn."""
+    if not text:
+        return ""
+    # Loại bỏ các ký tự không nằm trong nhóm chữ viết tiếng Việt cơ bản, số, khoảng trắng và các dấu câu tiêu chuẩn
+    emoji_pattern = re.compile(
+        r'[^\w\s,.:;!?()\-+=\'"/\\đĐ'
+        r'àáảãạăằắẳẵặâầấẩẫậ'
+        r'eèéẻẽẹêềếểễệ'
+        r'iìíỉĩị'
+        r'oòóỏõọôồốổỗộơờớởỡợ'
+        r'uùúủũụưừứửữự'
+        r'yỳýỷỹỵ]',
+        re.UNICODE
+    )
+    return emoji_pattern.sub('', text)
+
+
+def remove_special_characters(text: str) -> str:
+    """Loại bỏ các ký tự đặc biệt thừa thãi, chuẩn hóa khoảng trắng."""
+    if not text:
+        return ""
+    # Thay thế các ký tự đặc biệt phi chữ cái/chữ số thành khoảng trắng
+    allowed_pattern = re.compile(
+        r'[^a-zA-Z0-9\s_đĐ'
+        r'àáảãạăằắẳẵặâầấẩẫậ'
+        r'eèéẻẽẹêềếểễệ'
+        r'iìíỉĩị'
+        r'oòóỏõọôồốổỗộơờớởỡợ'
+        r'uùúủũụưừứửữự'
+        r'yỳýỷỹỵ]',
+        re.UNICODE
+    )
+    text = allowed_pattern.sub(' ', text)
+    return re.sub(r'\s+', ' ', text).strip()
+
+
+# ============================================================
 # THUẬT TOÁN TÁCH TỪ CUSTOM (LONGEST MATCHING) - 100% TỰ CODE
 # ============================================================
 

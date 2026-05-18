@@ -2,8 +2,6 @@ package com.chatbot.newsviet.data.api
 
 import com.chatbot.newsviet.data.model.ChatRequest
 import com.chatbot.newsviet.data.model.ChatResponse
-import com.chatbot.newsviet.data.model.CategoriesResponse
-import retrofit2.http.GET
 import retrofit2.http.Body
 import retrofit2.http.POST
 import com.chatbot.newsviet.BuildConfig
@@ -25,13 +23,9 @@ interface ChatApiService {
      * Parameters:
      * - question: Câu hỏi của người dùng
      * - top_k: Số kết quả trả về
-     * - category: Lọc theo danh mục (optional)
-     * - from_date: Lọc từ ngày YYYY-MM-DD (optional)
-     * - to_date: Lọc đến ngày YYYY-MM-DD (optional)
+     * - data_source: Nguồn dữ liệu đang hỏi (news/documents)
      */
     @POST("api/chat")
     suspend fun sendMessage(@Body request: ChatRequest): ChatResponse
 
-    @GET("api/categories")
-    suspend fun getCategories(): CategoriesResponse
 }

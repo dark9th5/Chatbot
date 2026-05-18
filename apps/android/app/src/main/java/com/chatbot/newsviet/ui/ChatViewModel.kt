@@ -4,184 +4,175 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.chatbot.newsviet.data.model.ChatResponse
+import com.chatbot.newsviet.data.model.SearchResult
 import com.chatbot.newsviet.data.repository.ChatRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.time.LocalDate
 import java.util.concurrent.atomic.AtomicLong
 
+enum class ChatDataSource(
+    val apiValue: String,
+    val label: String,
+    val inputHint: String
+) {
+    NEWS(
+        apiValue = "news",
+        label = "Tin tức",
+        inputHint = "Hỏi gì đó về tin tức..."
+    )
+}
+
 /**
- * Chat ViewModel — MVVM Pattern + Unidirectional Data Flow
- * Design Pattern: Observer (StateFlow thông báo Compose recompose)
- *
- * Chịu trách nhiệm:
- * - Quản lý UI State (single source of truth)
- * - Gọi Repository để gửi/nhận tin nhắn
- * - Quản lý filter state (category, date range)
- * - Expose state qua StateFlow (Compose-friendly)
+ * Chat ViewModel — quản lý lịch sử chat cho tin tức.
  */
 class ChatViewModel(
     private val repository: ChatRepository
 ) : ViewModel() {
 
     private val messageIdGenerator = AtomicLong(0)
-
-    // ============ UI State (Single Source of Truth) ============
+    private val messageHistoryBySource = mutableMapOf(
+        ChatDataSource.NEWS to emptyList<Message>()
+    )
+    private val pendingClarificationBySource = mutableMapOf<ChatDataSource, PendingClarification?>(
+        ChatDataSource.NEWS to null
+    )
 
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
-    init {
-        // Load categories on initialization
-        viewModelScope.launch {
-            val result = repository.getCategories()
-            result.onSuccess { categories ->
-                _uiState.update { it.copy(availableCategories = categories) }
-            }
-            result.onFailure { e ->
-                println("Failed to load categories: ${e.message}")
-            }
+    fun setDataSource(source: ChatDataSource) {
+        if (_uiState.value.selectedSource == source) return
+
+        _uiState.update {
+            it.copy(
+                selectedSource = source,
+                messages = messageHistoryBySource[source].orEmpty(),
+                error = null
+            )
         }
     }
 
-    // ============ User Actions ============
+    fun resetChat() {
+        val source = _uiState.value.selectedSource
+        messageHistoryBySource[source] = emptyList()
+        pendingClarificationBySource[source] = null
+        _uiState.update { it.copy(messages = emptyList(), error = null) }
+    }
 
-    /**
-     * Gửi câu hỏi đến chatbot với filters
-     */
     fun sendMessage(question: String) {
         if (question.isBlank()) return
 
-        val currentState = _uiState.value
+        val source = _uiState.value.selectedSource
+        val pendingContext = pendingClarificationBySource[source]
+        val conversationContext = pendingContext?.question
 
-        // Thêm tin nhắn user kèm theo bộ lọc
-        addMessage(Message(
-            id = nextMessageId(), 
-            text = question, 
-            isUser = true,
-            categoryFilter = currentState.selectedCategory,
-            fromDateFilter = currentState.fromDate,
-            toDateFilter = currentState.toDate
-        ))
+        addMessage(
+            source = source,
+            message = Message(
+                id = nextMessageId(),
+                text = question,
+                isUser = true
+            )
+        )
 
-        // Cập nhật loading state và reset filters (chỉ áp dụng cho tin nhắn hiện tại)
-        _uiState.update { it.copy(
-            isLoading = true, 
-            error = null,
-            selectedCategory = null,
-            fromDate = null,
-            toDate = null
-        ) }
+        _uiState.update { it.copy(isLoading = true, error = null) }
 
         viewModelScope.launch {
             try {
-                // Sử dụng currentState để gửi API, vì _uiState đã bị reset bộ lọc
                 val result = repository.sendMessage(
                     question = question,
-                    category = currentState.selectedCategory,
-                    fromDate = currentState.fromDate,
-                    toDate = currentState.toDate
+                    dataSource = source.apiValue,
+                    conversationContext = conversationContext
                 )
 
                 result.onSuccess { response ->
-                    val botMessage = formatBotResponse(response)
-                    addMessage(botMessage)
+                    pendingClarificationBySource[source] = if (response.needsClarification) {
+                        PendingClarification(question = question)
+                    } else {
+                        null
+                    }
+                    addMessage(source = source, message = formatBotResponse(response))
                 }
 
-                result.onFailure { _ ->
+                result.onFailure {
                     val errorMsg = "Kết nối máy chủ thất bại. Vui lòng thử lại sau."
-                    _uiState.update { it.copy(error = errorMsg) }
-                    addMessage(Message(id = nextMessageId(), text = "⚠ $errorMsg", isUser = false))
+                    updateErrorForSource(source, errorMsg)
+                    addMessage(
+                        source = source,
+                        message = Message(
+                            id = nextMessageId(),
+                            text = "⚠ $errorMsg",
+                            isUser = false
+                        )
+                    )
                 }
-            } catch (exception: Exception) {
+            } catch (_: Exception) {
                 val errorMsg = "Có lỗi xảy ra trong quá trình xử lý yêu cầu."
-                _uiState.update { it.copy(error = errorMsg) }
-                addMessage(Message(id = nextMessageId(), text = "⚠ $errorMsg", isUser = false))
+                updateErrorForSource(source, errorMsg)
+                addMessage(
+                    source = source,
+                    message = Message(
+                        id = nextMessageId(),
+                        text = "⚠ $errorMsg",
+                        isUser = false
+                    )
+                )
             }
 
-            _uiState.update { it.copy(isLoading = false) }
+            _uiState.update { state ->
+                if (state.selectedSource == source) {
+                    state.copy(isLoading = false)
+                } else {
+                    state
+                }
+            }
         }
     }
 
-    /**
-     * Cập nhật danh mục được chọn
-     */
-    fun setCategory(category: String?) {
-        _uiState.update { it.copy(selectedCategory = category) }
-    }
-
-    /**
-     * Cập nhật ngày bắt đầu
-     */
-    fun setFromDate(date: LocalDate?) {
-        _uiState.update { it.copy(fromDate = date) }
-    }
-
-    /**
-     * Cập nhật ngày kết thúc
-     */
-    fun setToDate(date: LocalDate?) {
-        _uiState.update { it.copy(toDate = date) }
-    }
-
-    /**
-     * Reset tất cả filters
-     */
-    fun resetFilters() {
-        _uiState.update { it.copy(
-            selectedCategory = null,
-            fromDate = null,
-            toDate = null
-        ) }
-    }
-
-    /**
-     * Xóa thông báo lỗi
-     */
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
 
-    // ============ Private Helpers ============
-
-    private fun addMessage(message: Message) {
+    private fun updateErrorForSource(source: ChatDataSource, error: String) {
         _uiState.update { state ->
-            state.copy(messages = state.messages + message)
+            if (state.selectedSource == source) {
+                state.copy(error = error)
+            } else {
+                state
+            }
+        }
+    }
+
+    private fun addMessage(source: ChatDataSource, message: Message) {
+        val updatedHistory = messageHistoryBySource[source].orEmpty() + message
+        messageHistoryBySource[source] = updatedHistory
+
+        _uiState.update { state ->
+            if (state.selectedSource == source) {
+                state.copy(messages = updatedHistory)
+            } else {
+                state
+            }
         }
     }
 
     private fun nextMessageId(): Long = messageIdGenerator.incrementAndGet()
 
     private fun formatBotResponse(response: ChatResponse): Message {
-        val sb = StringBuilder()
-
-        // Câu trả lời chính (đã được format sẵn từ backend)
         val safeAnswer = response.answer.takeIf { it.isNotBlank() }
             ?: "Hiện mình chưa biết câu trả lời dựa trên dữ liệu hiện có, bạn hãy hỏi câu hỏi khác."
-        sb.append(safeAnswer)
-
-        // Độ tin cậy
-        val confidenceValue = response.confidence
-        val confidencePercent = (confidenceValue * 100).toInt()
-        sb.append("\n\n🎯 Độ tin cậy: $confidencePercent%")
 
         return Message(
             id = nextMessageId(),
-            text = sb.toString(),
+            text = safeAnswer,
             isUser = false,
-            confidence = confidenceValue,
             sources = response.sources
         )
     }
 
-    // ============ Factory (DI) ============
-
-    /**
-     * Factory Method — inject Repository vào ViewModel
-     */
     class Factory(
         private val repository: ChatRepository
     ) : ViewModelProvider.Factory {
@@ -195,32 +186,20 @@ class ChatViewModel(
     }
 }
 
-// ============ UI State & Data Classes ============
-
-/**
- * Immutable UI State — Single Source of Truth cho toàn bộ màn hình Chat
- * Design Pattern: Unidirectional Data Flow
- */
 data class ChatUiState(
     val messages: List<Message> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
-    val selectedCategory: String? = null,
-    val fromDate: LocalDate? = null,
-    val toDate: LocalDate? = null,
-    val availableCategories: List<String> = emptyList()
+    val selectedSource: ChatDataSource = ChatDataSource.NEWS
 )
 
-/**
- * Data class đại diện cho 1 tin nhắn
- */
 data class Message(
     val id: Long,
     val text: String,
     val isUser: Boolean,
-    val confidence: Double = 0.0,
-    val categoryFilter: String? = null,
-    val fromDateFilter: LocalDate? = null,
-    val toDateFilter: LocalDate? = null,
-    val sources: List<com.chatbot.newsviet.data.model.SearchResult>? = null
+    val sources: List<SearchResult>? = null
+)
+
+private data class PendingClarification(
+    val question: String
 )

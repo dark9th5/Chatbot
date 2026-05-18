@@ -122,6 +122,44 @@ class NERExtractor:
         "USERNAME",
     }
     WEAK_SIGNAL_TYPES = {"ACTION", "TREND", "STATE"}
+    TOPIC_SINGLE_ALLOWLIST = {
+        "ai",
+        "bóng đá",
+        "bất động sản",
+        "công nghệ",
+        "chứng khoán",
+        "du lịch",
+        "giá",
+        "giáo dục",
+        "kinh tế",
+        "lãi suất",
+        "lạm phát",
+        "môi trường",
+        "ngân hàng",
+        "ngoại giao",
+        "năng lượng",
+        "pháp luật",
+        "thể thao",
+        "thời tiết",
+        "thuế",
+        "việc làm",
+        "y tế",
+        "biển đảo",
+        "an ninh mạng",
+        "điện lực",
+    }
+    TOPIC_PHRASE_BLOCKLIST = {
+        "chuyên gia",
+        "khu vực",
+        "kết quả",
+        "triển lãm",
+        "triệu usd",
+        "tuy nhiên",
+        "đặc biệt",
+        "đồng thời",
+        "thế giới",
+        "hội nghị thượng đỉnh",
+    }
     GENERIC_ANCHOR_TERMS = {
         "việt nam",
         "vn",
@@ -334,6 +372,12 @@ class NERExtractor:
             rf"\b(?:ông|bà|anh|chị|đồng chí|giáo sư|tiến sĩ|bác sĩ|luật sư)\s+"
             rf"([{VI_UPPER}][{VI_LOWER}]+(?:\s+[{VI_UPPER}][{VI_LOWER}]+){{1,3}})\b"
         )
+        # Generic titlecase person pattern: 2-3 consecutive titlecase tokens
+        # Require only spaces/tabs between tokens (avoid matching across newlines)
+        # e.g. matches "Nguyễn Chí Lực" but not "Nguyễn Chí Lực\nChức danh"
+        self.generic_person_pattern = re.compile(
+            rf"\b([{VI_UPPER}][{VI_LOWER}]+(?:[ \t]+[{VI_UPPER}][{VI_LOWER}]+){{1,2}})\b"
+        )
         self.dynamic_loc_pattern = re.compile(
             rf"\b(?:tỉnh|thành phố|tp|quận|huyện|thị xã|xã|phường|đảo|vịnh|"
             rf"sông|núi|hồ)\s+(?:[{VI_UPPER}][{VI_LOWER}]+|\d+)"
@@ -407,11 +451,17 @@ class NERExtractor:
 
         self.lexicons = self._build_seed_lexicons()
         self._merge_external_lexicons()
+        # Allowlist short meaningful tokens (acronyms) to keep
+        self._short_allowlist = {"ai", "gpt", "llm", "covid"}
+        # Normalize and filter lexicons: remove very short/noisy tokens except allowlist
         self.lexicons = {
             entity_type: {
                 normalized
                 for item in items
                 if (normalized := _normalize_for_match(item))
+                and (len(normalized) >= 3 or normalized in self._short_allowlist)
+                and normalized not in self.QUERY_STOPWORDS
+                and not normalized.isdigit()
             }
             for entity_type, items in self.lexicons.items()
         }
@@ -457,6 +507,105 @@ class NERExtractor:
             for phrase in self.lexicons.get(signal_type, set())
             for token in phrase.split()
         }
+        # Tokens that should not be considered as person name parts
+        self._person_noise_tokens = {
+            "các",
+            "từ",
+            "tại",
+            "chức",
+            "trường",
+            "đại",
+            "thành",
+            "bộ",
+            "sở",
+            "công",
+            "ty",
+            "tập",
+            "liên",
+            "quốc",
+        }
+        self._person_blocklist_prefixes = (
+            "công ty",
+            "tập đoàn",
+            "ngân hàng",
+            "bộ ",
+            "sở ",
+            "cục ",
+            "trường ",
+            "đại học",
+            "học viện",
+            "bệnh viện",
+            "đội tuyển",
+            "world cup",
+            "premier league",
+            "la liga",
+            "serie a",
+            "champions league",
+        )
+        self._time_like_duration_pattern = re.compile(
+            r"^\d{1,2}\s*giờ(?:\s*\d{1,2}\s*phút)?$",
+            re.IGNORECASE,
+        )
+        self._weekday_pattern = re.compile(
+            r"^thứ\s+(?:hai|ba|tư|bốn|năm|sáu|bảy)|chủ nhật$",
+            re.IGNORECASE,
+        )
+
+    def _remove_normalized_term(self, bucket: Set[str], normalized: str) -> None:
+        to_remove = {item for item in bucket if _normalize_for_match(item) == normalized}
+        bucket.difference_update(to_remove)
+
+    def _resolve_entity_conflicts(self, entities: Dict[str, Set[str]]) -> None:
+        """Resolve common cross-type collisions before returning final entities."""
+        normalized_by_type: Dict[str, Set[str]] = {
+            entity_type: {_normalize_for_match(value) for value in values}
+            for entity_type, values in entities.items()
+        }
+
+        # Keep TIME for hour expressions; drop duplicate DURATION/QUANTITY versions.
+        for value in list(normalized_by_type.get("TIME", set())):
+            if self._time_like_duration_pattern.match(value):
+                self._remove_normalized_term(entities["DURATION"], value)
+                self._remove_normalized_term(entities["QUANTITY"], value)
+
+        # Keep DATE for weekdays and drop ORDINAL duplication ("thứ hai", ...).
+        for value in list(normalized_by_type.get("DATE", set())):
+            if self._weekday_pattern.match(value):
+                self._remove_normalized_term(entities["ORDINAL"], value)
+
+        # For ambiguous PERSON terms, prefer stronger semantic buckets.
+        person_values = list(normalized_by_type.get("PERSON", set()))
+        preferred_over_person = {
+            "LOC",
+            "ORG",
+            "FACILITY",
+            "EVENT",
+            "PRODUCT",
+            "VEHICLE",
+            "SPORT_TEAM",
+            "LAW",
+            "DISEASE",
+            "WORK_OF_ART",
+            "LANGUAGE",
+            "NATIONALITY",
+            "AWARD",
+            "INDEX",
+            "CRYPTO",
+        }
+        for value in person_values:
+            has_stronger_type = any(
+                value in normalized_by_type.get(entity_type, set())
+                for entity_type in preferred_over_person
+            )
+            is_non_person_phrase = any(
+                value.startswith(prefix) for prefix in self._person_blocklist_prefixes
+            )
+            if has_stronger_type or is_non_person_phrase:
+                self._remove_normalized_term(entities["PERSON"], value)
+
+            # If the same token appears as TOPIC and looks generic, keep TOPIC only.
+            if value in normalized_by_type.get("TOPIC", set()) and len(value.split()) <= 3:
+                self._remove_normalized_term(entities["PERSON"], value)
 
     def _build_seed_lexicons(self) -> Dict[str, Set[str]]:
         return {
@@ -902,6 +1051,43 @@ class NERExtractor:
                 keywords.append(token)
         return keywords
 
+    def _filter_topic_terms(self, values: Iterable[str]) -> List[str]:
+        """Keep topic phrases that are meaningful for news retrieval.
+
+        Rules:
+        - keep short acronyms if allowlisted (AI/GPT/LLM/COVID)
+        - keep multiword phrases
+        - keep single tokens only if length >= 4 or allowlisted
+        - drop pure stopwords/numbers
+        """
+        filtered: List[str] = []
+        seen: Set[str] = set()
+        for raw in values:
+            term = _normalize_for_match(raw)
+            if not term or term in seen:
+                continue
+            seen.add(term)
+
+            parts = term.split()
+            if not parts:
+                continue
+            if term in self.QUERY_STOPWORDS and term not in self._short_allowlist:
+                continue
+            if term.isdigit():
+                continue
+            if term in self.TOPIC_PHRASE_BLOCKLIST:
+                continue
+            if len(parts) == 1:
+                if term in self.TOPIC_SINGLE_ALLOWLIST or term in self._short_allowlist:
+                    filtered.append(term)
+                continue
+            if len(parts) == 1 and len(term) < 4 and term not in self._short_allowlist:
+                continue
+            if any(len(part) == 1 for part in parts):
+                continue
+            filtered.append(term)
+        return filtered
+
     def analyze_query(self, text: str) -> Dict[str, object]:
         """
         Phân tích câu hỏi thành các lớp tín hiệu phục vụ tìm kiếm.
@@ -949,7 +1135,10 @@ class NERExtractor:
                     ordered.append(normalized)
             return ordered
 
-        ordered_anchor_terms = dedupe(anchor_terms + anchor_keywords)
+        # Build ordered anchors then filter out short/noisy tokens except allowlist
+        ordered_anchor_terms = [t for t in dedupe(anchor_terms + anchor_keywords)
+                    if (len(t) >= 3 or t in self._short_allowlist)
+                    and (t not in self.QUERY_STOPWORDS or t in self._short_allowlist)]
         # When deciding whether a query "requires_clarification", ignore
         # anchors that are only weak signals (e.g. TREND/ACTION/STATE tokens)
         # because they don't provide a concrete search anchor by themselves.
@@ -969,6 +1158,7 @@ class NERExtractor:
             + ordered_weak_terms
             + ordered_residual_keywords
         )
+        search_terms = self._filter_topic_terms(search_terms)
         term_weights = {
             **{term: 4.0 for term in ordered_anchor_terms},
             **{
@@ -1031,12 +1221,34 @@ class NERExtractor:
         if self.ai_abbrev_pattern.search(text):
             entities["TOPIC"].add("ai")
         entities["TOPIC"].update(
-            _normalize_for_match(match)
-            for match in self.ai_phrase_pattern.findall(text)
+            self._filter_topic_terms(
+                _normalize_for_match(match)
+                for match in self.ai_phrase_pattern.findall(text)
+            )
         )
 
+        # 1) Strong VN-surname pattern
         entities["PERSON"].update(self.person_pattern.findall(text))
-        entities["PERSON"].update(self.titled_person_pattern.findall(text))
+        # 2) Titled person (ông/bà/tiến sĩ ...)
+        titled = self.titled_person_pattern.findall(text)
+        # titled_person_pattern may capture group; normalize consistently
+        if titled:
+            # If pattern returns tuples (group), flatten
+            for item in titled:
+                if isinstance(item, tuple):
+                    entities["PERSON"].add(item[0])
+                else:
+                    entities["PERSON"].add(item)
+        # 3) Generic titlecase matches as fallback, but filter noise and newline-joined tokens
+        for match in self.generic_person_pattern.findall(text):
+            norm = _normalize_for_match(match)
+            # skip if contains any noise token or is too short
+            parts = {p.strip().casefold() for p in norm.split()}
+            if parts & self._person_noise_tokens:
+                continue
+            if any(len(p) <= 1 for p in parts):
+                continue
+            entities["PERSON"].add(match)
         entities["LOC"].update(_normalize_for_match(match) for match in self.dynamic_loc_pattern.findall(text))
         entities["LOC"].update(self._extract_capitalized_single_token_locs(text))
         entities["ORG"].update(_normalize_for_match(match) for match in self.dynamic_org_pattern.findall(text))
@@ -1051,6 +1263,10 @@ class NERExtractor:
         titlecase_matches = self._extract_titlecase_lexicon_maxmatch(text)
         for entity_type, values in titlecase_matches.items():
             entities.setdefault(entity_type, set()).update(values)
+
+        # Final cleanup for TOPIC: remove noisy single tokens and retain news-relevant phrases.
+        entities["TOPIC"] = set(self._filter_topic_terms(entities["TOPIC"]))
+        self._resolve_entity_conflicts(entities)
 
         return {
             entity_type: self._sorted(entities.get(entity_type, set()))

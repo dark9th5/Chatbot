@@ -29,13 +29,6 @@
             </div>
         </div>
 
-        <div class="stat-card">
-            <div class="stat-icon">📄</div>
-            <div class="stat-content">
-                <h3>{{ stats.total_documents }}</h3>
-                <p>Documents</p>
-            </div>
-        </div>
 
         {% for source, count in stats.news_by_source.items() %}
         <div class="stat-card">
@@ -79,7 +72,6 @@
                 <h4 class="news-title">
                     <a href="/news/{{ item.id }}">{{ item.title }}</a>
                 </h4>
-                <p class="news-summary">{{ item.summary[:150] }}...</p>
                 <div class="news-meta">
                     <span>📏 {{ item.content_length }} ký tự</span>
                 </div>

@@ -10,11 +10,10 @@ data class ChatRequest(
     val question: String,
     @SerializedName("top_k")
     val topK: Int = 3,
-    val category: String? = null,
-    @SerializedName("from_date")
-    val fromDate: String? = null,  // Format: YYYY-MM-DD
-    @SerializedName("to_date")
-    val toDate: String? = null     // Format: YYYY-MM-DD
+    @SerializedName("data_source")
+    val dataSource: String = "news",
+    @SerializedName("conversation_context")
+    val conversationContext: String? = null
 )
 
 /**
@@ -34,7 +33,9 @@ data class SearchResult(
     @SerializedName("article_source")
     val articleSource: String,
     @SerializedName("article_link")
-    val articleLink: String = ""
+    val articleLink: String = "",
+    @SerializedName("published_date")
+    val publishedDate: String? = null
 )
 
 /**
@@ -43,16 +44,10 @@ data class SearchResult(
 data class ChatResponse(
     val question: String,
     val answer: String,
-    val confidence: Double,
     val sources: List<SearchResult>,
     @SerializedName("total_chunks_searched")
-    val totalChunksSearched: Int
+    val totalChunksSearched: Int,
+    @SerializedName("needs_clarification")
+    val needsClarification: Boolean = false
 )
 
-/**
- * CategoriesResponse — Danh sách danh mục từ server
- */
-data class CategoriesResponse(
-    val categories: List<String>,
-    val count: Int
-)

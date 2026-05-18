@@ -41,9 +41,11 @@ def chat(
     return service.get_answer(
         question=request.question,
         top_k=request.top_k,
+        data_source=request.data_source,
         category=request.category,
         from_date=request.from_date,
-        to_date=request.to_date
+        to_date=request.to_date,
+        conversation_context=request.conversation_context,
     )
 
 
@@ -79,18 +81,16 @@ def list_categories() -> CategoriesResponse:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 1. Lấy tất cả danh mục hiện có trong bảng articles
-        cursor.execute("SELECT DISTINCT category FROM articles WHERE category IS NOT NULL")
+        # 1. Chỉ lấy danh mục tin tức, không trộn lẫn file upload.
+        cursor.execute(
+            "SELECT DISTINCT category FROM articles "
+            "WHERE category IS NOT NULL AND link NOT LIKE %s",
+            ("upload://%",),
+        )
         rows = cursor.fetchall()
         for row in rows:
-            if row['category']:
+            if row['category'] and row['category'] != 'Tài liệu':
                 categories.add(row['category'])
-        
-        # 2. Kiểm tra nếu có dữ liệu Tài liệu
-        cursor.execute("SELECT COUNT(*) as cnt FROM documents")
-        doc_count = cursor.fetchone()['cnt']
-        if doc_count > 0:
-            categories.add('Tài liệu')
             
         conn.close()
     except Exception as e:

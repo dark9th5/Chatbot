@@ -24,7 +24,7 @@ def _get_connection():
 # ============================================================
 
 QUESTION_TEMPLATES = {
-    'PER': [
+    'PERSON': [
         "{entity} có vai trò gì trong bài \"{title}\"?",
         "Trong bài \"{title}\", {entity} được nhắc tới với hoạt động nào?",
         "Điểm đáng chú ý liên quan đến {entity} trong bài \"{title}\" là gì?",
@@ -43,6 +43,31 @@ QUESTION_TEMPLATES = {
         "Vào {entity}, sự kiện chính nào được đề cập trong bài \"{title}\"?",
         "Mốc thời gian {entity} gắn với diễn biến gì trong bài \"{title}\"?",
         "Theo bài \"{title}\", chuyện gì xảy ra vào {entity}?",
+    ],
+    'DATE': [
+        "Vào {entity}, sự kiện chính nào được đề cập trong bài \"{title}\"?",
+        "Mốc ngày {entity} gắn với diễn biến gì trong bài \"{title}\"?",
+        "Theo bài \"{title}\", chuyện gì xảy ra vào {entity}?",
+    ],
+    'EVENT': [
+        "Sự kiện {entity} được nhắc đến như thế nào trong bài \"{title}\"?",
+        "Theo bài \"{title}\", điểm đáng chú ý của {entity} là gì?",
+        "{entity} liên quan tới diễn biến nào trong bài \"{title}\"?",
+    ],
+    'PRODUCT': [
+        "Bài \"{title}\" nêu thông tin gì về {entity}?",
+        "{entity} được đề cập với điểm nổi bật nào trong bài \"{title}\"?",
+        "Theo bài \"{title}\", diễn biến chính liên quan đến {entity} là gì?",
+    ],
+    'LAW': [
+        "Bài \"{title}\" nói gì về {entity}?",
+        "{entity} liên quan tới thay đổi nào trong bài \"{title}\"?",
+        "Theo bài \"{title}\", nội dung đáng chú ý của {entity} là gì?",
+    ],
+    'TOPIC': [
+        "Bài \"{title}\" cập nhật điều gì về {entity}?",
+        "Diễn biến chính của {entity} trong bài \"{title}\" là gì?",
+        "Theo bài \"{title}\", điểm đáng chú ý về {entity} là gì?",
     ],
 }
 

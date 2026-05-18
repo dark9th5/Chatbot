@@ -1,43 +1,90 @@
 package com.chatbot.newsviet.ui
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.*
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.chatbot.newsviet.ui.theme.*
-import java.time.LocalDate
+import com.chatbot.newsviet.ui.theme.Background
+import com.chatbot.newsviet.ui.theme.BotBubble
+import com.chatbot.newsviet.ui.theme.BotBubbleBorder
+import com.chatbot.newsviet.ui.theme.Divider
+import com.chatbot.newsviet.ui.theme.Primary
+import com.chatbot.newsviet.ui.theme.PrimaryDark
+import com.chatbot.newsviet.ui.theme.Secondary
+import com.chatbot.newsviet.ui.theme.Success
+import com.chatbot.newsviet.ui.theme.SurfaceDim
+import com.chatbot.newsviet.ui.theme.SurfaceLight
+import com.chatbot.newsviet.ui.theme.TextMuted
+import com.chatbot.newsviet.ui.theme.TextOnPrimary
+import com.chatbot.newsviet.ui.theme.TextPrimary
+import com.chatbot.newsviet.ui.theme.TextSecondary
+import com.chatbot.newsviet.ui.theme.UserBubbleEnd
+import com.chatbot.newsviet.ui.theme.UserBubbleStart
 
-/**
- * ChatScreen — Composable chính
- * Design Pattern: State Hoisting + Unidirectional Data Flow
- *
- * Screen chỉ nhận ViewModel, sub-composables nhận data + lambda.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatScreen(viewModel: ChatViewModel) {
@@ -45,14 +92,12 @@ fun ChatScreen(viewModel: ChatViewModel) {
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // Auto-scroll khi có tin nhắn mới
-    LaunchedEffect(uiState.messages.size) {
+    LaunchedEffect(uiState.messages.size, uiState.selectedSource) {
         if (uiState.messages.isNotEmpty()) {
             listState.animateScrollToItem(uiState.messages.size - 1)
         }
     }
 
-    // Snackbar
     val snackbarHostState = remember { SnackbarHostState() }
     LaunchedEffect(uiState.error) {
         uiState.error?.let { msg ->
@@ -63,34 +108,25 @@ fun ChatScreen(viewModel: ChatViewModel) {
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbarHostState) },
-        topBar = { ChatTopBar() },
+        topBar = {
+            ChatTopBar(
+                onResetChat = viewModel::resetChat,
+                resetEnabled = uiState.messages.isNotEmpty() && !uiState.isLoading
+            )
+        },
         bottomBar = {
-            Column(modifier = Modifier.background(Background)) {
-                // Filter Panel
-                FilterPanel(
-                    availableCategories = uiState.availableCategories,
-                    selectedCategory = uiState.selectedCategory,
-                    fromDate = uiState.fromDate,
-                    toDate = uiState.toDate,
-                    onCategorySelected = { viewModel.setCategory(it) },
-                    onFromDateSelected = { viewModel.setFromDate(it) },
-                    onToDateSelected = { viewModel.setToDate(it) },
-                    onReset = { viewModel.resetFilters() }
-                )
-                
-                // Chat Input Bar
-                ChatInputBar(
-                    inputText = inputText,
-                    isLoading = uiState.isLoading,
-                    onTextChange = { inputText = it },
-                    onSend = {
-                        if (inputText.isNotBlank()) {
-                            viewModel.sendMessage(inputText.trim())
-                            inputText = ""
-                        }
+            ChatInputBar(
+                inputText = inputText,
+                isLoading = uiState.isLoading,
+                placeholder = uiState.selectedSource.inputHint,
+                onTextChange = { inputText = it },
+                onSend = {
+                    if (inputText.isNotBlank()) {
+                        viewModel.sendMessage(inputText.trim())
+                        inputText = ""
                     }
-                )
-            }
+                }
+            )
         },
         containerColor = Background
     ) { paddingValues ->
@@ -129,22 +165,20 @@ fun ChatScreen(viewModel: ChatViewModel) {
     }
 }
 
-// ============ Top Bar ============
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ChatTopBar() {
+fun ChatTopBar(
+    onResetChat: () -> Unit,
+    resetEnabled: Boolean
+) {
     TopAppBar(
         title = {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // Avatar Bot
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(
-                            Brush.linearGradient(listOf(Primary, Secondary))
-                        ),
+                        .background(Brush.linearGradient(listOf(Primary, Secondary))),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
@@ -171,18 +205,27 @@ fun ChatTopBar() {
                 }
             }
         },
+        actions = {
+            IconButton(
+                onClick = onResetChat,
+                enabled = resetEnabled
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Refresh,
+                    contentDescription = "Đặt lại đoạn chat",
+                    tint = if (resetEnabled) TextOnPrimary else TextOnPrimary.copy(alpha = 0.45f)
+                )
+            }
+        },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = PrimaryDark
         )
     )
 }
 
-// ============ Message Bubble ============
-
 @Composable
 fun MessageBubble(message: Message) {
     val isUser = message.isUser
-    val uriHandler = LocalUriHandler.current
 
     Row(
         modifier = Modifier
@@ -195,44 +238,6 @@ fun MessageBubble(message: Message) {
         verticalAlignment = Alignment.Bottom
     ) {
         if (isUser) {
-            // Hiển thị icon filter nếu user có dùng filter
-            val hasFilter = message.categoryFilter != null || message.fromDateFilter != null || message.toDateFilter != null
-            if (hasFilter) {
-                var expanded by remember { mutableStateOf(false) }
-                Box {
-                    IconButton(
-                        onClick = { expanded = !expanded },
-                        modifier = Modifier.size(36.dp).padding(end = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.FilterList,
-                            contentDescription = "Bộ lọc đã dùng",
-                            tint = Primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = expanded,
-                        onDismissRequest = { expanded = false }
-                    ) {
-                        if (message.categoryFilter != null) {
-                            DropdownMenuItem(
-                                text = { Text("Danh mục: ${message.categoryFilter}") },
-                                onClick = { expanded = false }
-                            )
-                        }
-                        if (message.fromDateFilter != null || message.toDateFilter != null) {
-                            val timeStr = "${message.fromDateFilter?.toString() ?: "..."} đến ${message.toDateFilter?.toString() ?: "..."}"
-                            DropdownMenuItem(
-                                text = { Text("Thời gian: $timeStr") },
-                                onClick = { expanded = false }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // USER: Gradient bubble
             Box(
                 modifier = Modifier
                     .shadow(
@@ -240,9 +245,7 @@ fun MessageBubble(message: Message) {
                         shape = RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp)
                     )
                     .clip(RoundedCornerShape(20.dp, 20.dp, 4.dp, 20.dp))
-                    .background(
-                        Brush.linearGradient(listOf(UserBubbleStart, UserBubbleEnd))
-                    )
+                    .background(Brush.linearGradient(listOf(UserBubbleStart, UserBubbleEnd)))
             ) {
                 Text(
                     text = message.text,
@@ -253,15 +256,12 @@ fun MessageBubble(message: Message) {
                 )
             }
         } else {
-            // BOT: White card with subtle border
             Surface(
                 shape = RoundedCornerShape(4.dp, 20.dp, 20.dp, 20.dp),
                 color = BotBubble,
                 tonalElevation = 1.dp,
                 shadowElevation = 2.dp,
-                border = androidx.compose.foundation.BorderStroke(
-                    0.5.dp, BotBubbleBorder
-                )
+                border = androidx.compose.foundation.BorderStroke(0.5.dp, BotBubbleBorder)
             ) {
                 Column(modifier = Modifier.padding(14.dp)) {
                     Text(
@@ -270,69 +270,17 @@ fun MessageBubble(message: Message) {
                         fontSize = 15.sp,
                         lineHeight = 22.sp
                     )
-
-                    // Link bài báo
-                    if (!message.sources.isNullOrEmpty()) {
-                        val mainSource = message.sources.firstOrNull { it.articleLink.isNotEmpty() }
-                        if (mainSource != null) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clickable { uriHandler.openUri(mainSource.articleLink) }
-                                    .padding(vertical = 4.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = Primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Bấm vào để xem thông tin chi tiết",
-                                    color = Primary,
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
-                    }
-
-                    // Confidence badge
-                    if (message.confidence > 0) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        val pct = (message.confidence * 100).toInt()
-                        val badgeColor = when {
-                            pct >= 70 -> Success
-                            pct >= 40 -> Accent
-                            else -> Error
-                        }
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = badgeColor.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                text = "🎯 $pct%",
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                                color = badgeColor,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-                    }
                 }
             }
         }
     }
 }
 
-// ============ Input Bar ============
-
 @Composable
 fun ChatInputBar(
     inputText: String,
     isLoading: Boolean,
+    placeholder: String,
     onTextChange: (String) -> Unit,
     onSend: () -> Unit
 ) {
@@ -352,7 +300,7 @@ fun ChatInputBar(
                 onValueChange = onTextChange,
                 modifier = Modifier.weight(1f),
                 placeholder = {
-                    Text("Hỏi gì đó về tin tức...", color = TextMuted)
+                    Text(placeholder, color = TextMuted)
                 },
                 shape = RoundedCornerShape(24.dp),
                 maxLines = 4,
@@ -367,7 +315,6 @@ fun ChatInputBar(
 
             Spacer(modifier = Modifier.width(10.dp))
 
-            // Send Button — Gradient
             val canSend = !isLoading && inputText.isNotBlank()
             Box(
                 modifier = Modifier
@@ -385,7 +332,6 @@ fun ChatInputBar(
                     modifier = Modifier.size(50.dp)
                 ) {
                     if (isLoading) {
-                        // Custom rotation animation — avoids Material3 keyframes API crash
                         val infiniteTransition = rememberInfiniteTransition(label = "loading")
                         val rotation by infiniteTransition.animateFloat(
                             initialValue = 0f,
@@ -418,8 +364,6 @@ fun ChatInputBar(
     }
 }
 
-// ============ Welcome Screen ============
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WelcomeScreen(
@@ -437,14 +381,11 @@ fun WelcomeScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 32.dp, vertical = 24.dp)
         ) {
-            // Animated bot icon
             Box(
                 modifier = Modifier
                     .size(70.dp)
                     .clip(CircleShape)
-                    .background(
-                        Brush.linearGradient(listOf(Primary, Secondary))
-                    ),
+                    .background(Brush.linearGradient(listOf(Primary, Secondary))),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
@@ -467,53 +408,15 @@ fun WelcomeScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                "Tôi là Chatbot tin tức Việt Nam\nHỏi tôi bất cứ gì về tin tức!",
+                text = "Bạn muốn biết thông tin gì về tin tức không ?\nTôi đang có tin tức về Thời sự, Thế giới, Kinh doanh, Giải trí, Thể thao, Pháp luật, Giáo dục, Sức khỏe, Đời sống, Du lịch, Khoa học, Số hóa, Xe, Xã hội, Văn hóa, Thời tiết.",
                 fontSize = 14.sp,
                 color = TextSecondary,
                 textAlign = TextAlign.Center,
                 lineHeight = 22.sp
             )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Suggestion chips
-            val suggestions = listOf(
-                "📰" to "Thời sự hôm nay",
-                "💰" to "Giá vàng hôm nay"
-            )
-            
-            suggestions.forEach { (icon, text) ->
-                OutlinedCard(
-                    onClick = { onSuggestionClick(text) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 4.dp)
-                        .height(48.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Divider),
-                    colors = CardDefaults.outlinedCardColors(containerColor = SurfaceLight)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Start
-                    ) {
-                        Text(icon, fontSize = 18.sp)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = text,
-                            fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp,
-                            color = TextPrimary
-                        )
-                    }
-                }
-            }
         }
     }
 }
-
-// ============ Typing Indicator ============
 
 @Composable
 fun TypingIndicator() {
