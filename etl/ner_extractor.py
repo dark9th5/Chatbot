@@ -23,19 +23,18 @@ def _normalize_for_match(value: str) -> str:
 
 class NERExtractor:
     """
-    Bộ rút trích thực thể tiếng Việt tất định cho miền tin tức.
+    Bộ rút trích thực thể + tín hiệu ngữ nghĩa tiếng Việt tất định cho miền tin tức.
 
-    Hỗ trợ 27 loại thực thể:
-    PERSON, ORG, LOC, MONEY, DATE, TIME, JOB, EVENT, PRODUCT, LAW,
-    PERCENT, PHONE, EMAIL, URL, AGE, TEMPERATURE, QUANTITY, SCORE,
-    FACILITY, VEHICLE, AWARD, DISEASE, SPORT_TEAM, WORK_OF_ART,
-    LANGUAGE, NATIONALITY, CRYPTO.
+    Lớp lõi vẫn là NER đúng nghĩa: người, tổ chức, địa danh, mốc thời gian,
+    tiền tệ, sản phẩm, luật, giải thưởng... Ngoài ra bộ trích xuất còn nhận diện
+    thêm TOPIC/ACTION/TREND/STATE để câu hỏi không có tên riêng vẫn còn tín hiệu
+    phục vụ truy hồi. Tổng cộng hiện có 40 nhóm đầu ra.
 
-    Thiết kế theo 3 lớp:
+    Thiết kế theo 4 lớp:
     1. Regex cho các mẫu có cấu trúc rõ ràng.
     2. Từ điển MaxMatch cho thực thể tên riêng.
-    3. Tùy chọn nạp thêm data/ner_lexicons.json để mở rộng tới hàng chục nghìn mục
-       mà không cần sửa code.
+    3. Từ điển semantic lexicon cho chủ đề, hành động, xu hướng, trạng thái.
+    4. Tùy chọn nạp thêm data/ner_lexicons.json để mở rộng mà không cần sửa code.
     """
 
     TYPE_ORDER = [
@@ -66,27 +65,168 @@ class NERExtractor:
         "LANGUAGE",
         "NATIONALITY",
         "CRYPTO",
+        "ADDRESS",
+        "IDENTIFIER",
+        "STOCK_TICKER",
+        "INDEX",
+        "ORDINAL",
+        "CARDINAL",
+        "DURATION",
+        "HASHTAG",
+        "USERNAME",
+        "TOPIC",
+        "ACTION",
+        "TREND",
+        "STATE",
     ]
+
+    PRIMARY_ANCHOR_TYPES = {
+        "PERSON",
+        "ORG",
+        "LOC",
+        "JOB",
+        "EVENT",
+        "PRODUCT",
+        "LAW",
+        "FACILITY",
+        "VEHICLE",
+        "AWARD",
+        "DISEASE",
+        "SPORT_TEAM",
+        "WORK_OF_ART",
+        "LANGUAGE",
+        "NATIONALITY",
+        "CRYPTO",
+        "STOCK_TICKER",
+        "INDEX",
+        "TOPIC",
+    }
+    SUPPORTING_TYPES = {
+        "MONEY",
+        "DATE",
+        "TIME",
+        "PERCENT",
+        "PHONE",
+        "EMAIL",
+        "URL",
+        "AGE",
+        "TEMPERATURE",
+        "QUANTITY",
+        "SCORE",
+        "ADDRESS",
+        "IDENTIFIER",
+        "ORDINAL",
+        "CARDINAL",
+        "DURATION",
+        "HASHTAG",
+        "USERNAME",
+    }
+    WEAK_SIGNAL_TYPES = {"ACTION", "TREND", "STATE"}
+    GENERIC_ANCHOR_TERMS = {
+        "việt nam",
+        "vn",
+        "thế giới",
+        "quốc tế",
+        "trong nước",
+        "ngoài nước",
+    }
+    QUERY_STOPWORDS = {
+        "ai",
+        "gì",
+        "nào",
+        "sao",
+        "vì",
+        "tại",
+        "ở",
+        "đâu",
+        "khi",
+        "bao",
+        "giờ",
+        "như",
+        "thế",
+        "nào",
+        "có",
+        "không",
+        "chưa",
+        "đã",
+        "đang",
+        "sẽ",
+        "vừa",
+        "mới",
+        "tin",
+        "là",
+        "của",
+        "cho",
+        "với",
+        "về",
+        "trong",
+        "ngoài",
+        "trên",
+        "dưới",
+        "từ",
+        "đến",
+        "vào",
+        "ra",
+        "và",
+        "hoặc",
+        "hay",
+        "nhưng",
+        "mà",
+        "thì",
+        "do",
+        "bởi",
+        "theo",
+        "này",
+        "kia",
+        "đó",
+        "ấy",
+        "một",
+        "các",
+        "những",
+        "mọi",
+        "rồi",
+        "còn",
+        "vẫn",
+        "lại",
+        "đều",
+        "luôn",
+        "rất",
+        "quá",
+        "hơn",
+        "nhất",
+        "đây",
+        "đi",
+        "chơi",
+        "nhiêu",
+    }
 
     def __init__(self):
         self.money_pattern = re.compile(
-            r"\b\d+(?:[\.,]\d+)?\s*(?:nghìn|ngàn|triệu|tỷ|nghìn tỷ|"
-            r"đồng|vnđ|vnd|usd|đô la|đô la mỹ|euro|eur|bảng anh|gbp|"
-            r"nhân dân tệ|cny|yên|jpy|won|krw|baht|thb)\b",
+            r"(?<!\w)\d+(?:[\.,]\d+)?\s*(?:(?:nghìn|ngàn|triệu|tỷ|nghìn tỷ)\s*)?"
+            r"(?:đồng|vnđ|vnd|usd|đô la|đô la mỹ|euro|eur|bảng anh|gbp|"
+            r"nhân dân tệ|cny|yên|jpy|won|krw|baht|thb)\b"
+            r"|(?<!\w)\d+(?:[\.,]\d+)?\s*(?:nghìn|ngàn|triệu|tỷ|nghìn tỷ)\b"
+            r"|(?<!\w)[$€£¥₫]\s*\d+(?:[\.,]\d+)?\b",
             re.IGNORECASE,
         )
         self.date_pattern = re.compile(
             r"\b(?:ngày\s+)?(?:0?[1-9]|[12][0-9]|3[01])/(?:0?[1-9]|1[012])(?:/\d{2,4})?\b"
             r"|\b(?:0?[1-9]|[12][0-9]|3[01])-(?:0?[1-9]|1[012])-\d{2,4}\b"
+            r"|\b\d{4}-(?:0?[1-9]|1[012])-(?:0?[1-9]|[12][0-9]|3[01])\b"
+            r"|\b(?:ngày\s+)?(?:0?[1-9]|[12][0-9]|3[01])\s+tháng\s+(?:0?[1-9]|1[012])(?:\s+năm\s+\d{4})?\b"
             r"|\b(?:tháng\s+)?(?:0?[1-9]|1[012])\s+năm\s+\d{4}\b"
+            r"|\bnăm\s+\d{4}\b"
             r"|\bquý\s+[ivx1-4]+\s*(?:năm\s+)?\d{4}\b"
+            r"|\b(?:thứ\s+hai|thứ\s+ba|thứ\s+tư|thứ\s+năm|thứ\s+sáu|thứ\s+bảy|chủ nhật)\b"
             r"|\b(?:hôm nay|hôm qua|ngày mai|sáng nay|chiều nay|tối nay|"
             r"tuần này|tuần trước|tuần sau|tháng này|tháng trước|tháng sau|"
             r"năm nay|năm ngoái|đầu năm|cuối năm)\b",
             re.IGNORECASE,
         )
         self.time_pattern = re.compile(
-            r"\b(?:[01]?\d|2[0-3])[:h](?:[0-5]\d)\b"
+            r"\b(?:[01]?\d|2[0-3])[:h](?:[0-5]\d)\s*[-–]\s*(?:[01]?\d|2[0-3])[:h](?:[0-5]\d)\b"
+            r"|\btừ\s+(?:[01]?\d|2[0-3])[:h](?:[0-5]\d)\s+đến\s+(?:[01]?\d|2[0-3])[:h](?:[0-5]\d)\b"
+            r"|\b(?:[01]?\d|2[0-3])[:h](?:[0-5]\d)\b"
             r"|\b(?:[01]?\d|2[0-3])\s*giờ(?:\s*(?:[0-5]\d)\s*phút)?\b"
             r"|\b(?:sáng|trưa|chiều|tối|đêm|rạng sáng)\b",
             re.IGNORECASE,
@@ -119,12 +259,64 @@ class NERExtractor:
             r"chiếc|căn|hộ|vé|đơn|ca|bộ|sản phẩm)\b",
             re.IGNORECASE,
         )
+        self.duration_pattern = re.compile(
+            r"\b\d+(?:[\.,]\d+)?\s*(?:giây|phút|giờ|ngày|tuần|tháng|năm)\b",
+            re.IGNORECASE,
+        )
         self.score_pattern = re.compile(
-            r"\b\d{1,2}\s*-\s*\d{1,2}\b"
+            r"(?<![:\d])\b\d{1,2}\s*-\s*\d{1,2}\b(?![:\d])"
         )
         self.legal_document_pattern = re.compile(
             r"\b(?:luật|bộ luật|nghị định|thông tư|nghị quyết|chỉ thị|quyết định)\s+"
             r"(?:số\s+)?\d{1,4}/\d{2,4}/[A-ZĐ0-9-]+\b",
+            re.IGNORECASE,
+        )
+        self.address_pattern = re.compile(
+            rf"\b(?:số\s+)?\d+[A-Za-z]?(?:/\d+[A-Za-z]?)*\s+"
+            rf"(?:đường|phố|ngõ|hẻm)\s+(?:[{VI_UPPER}][{VI_LOWER}0-9]+)"
+            rf"(?:\s+(?:[{VI_UPPER}][{VI_LOWER}0-9]+)){{0,4}}\b"
+        )
+        self.identifier_pattern = re.compile(
+            r"\b(?:cccd|cmnd|mã số thuế|mst|mã hồ sơ|số hộ chiếu|biển số|mã chuyến bay)\s*[:#]?\s*"
+            r"[A-Z0-9][A-Z0-9./-]{3,}\b",
+            re.IGNORECASE,
+        )
+        self.license_plate_pattern = re.compile(
+            r"\b\d{2}[A-Z]{1,2}-\d{3}(?:\.\d{2})?\b"
+        )
+        self.flight_code_pattern = re.compile(
+            r"\b(?:VN|VJ|QH|BL|BAV|HVN)\s?\d{2,4}\b",
+            re.IGNORECASE,
+        )
+        self.stock_ticker_pattern = re.compile(
+            r"\b(?:mã cổ phiếu|cổ phiếu|mã chứng khoán)\s+([A-Z]{2,5})\b"
+        )
+        self.index_pattern = re.compile(
+            r"\b(?:vn-index|vn30|hastc-index|hnx-index|upcom-index|dow jones|s&p 500|nasdaq|nikkei 225)\b",
+            re.IGNORECASE,
+        )
+        self.ordinal_pattern = re.compile(
+            r"\b(?:thứ\s+(?:nhất|hai|ba|tư|bốn|năm|sáu|bảy|tám|chín|mười)|"
+            r"hạng\s+\d+|top\s+\d+|lần\s+thứ\s+\d+)\b",
+            re.IGNORECASE,
+        )
+        self.cardinal_pattern = re.compile(
+            r"(?<![\w./:-])\d{1,3}(?:[.,]\d{3})*(?:,\d+)?(?![\w./:,%-])"
+        )
+        self.hashtag_pattern = re.compile(
+            r"(?<!\w)#[\w_]+",
+            re.UNICODE,
+        )
+        self.username_pattern = re.compile(
+            r"(?<!\w)@[\w_.]{2,}",
+            re.UNICODE,
+        )
+        self.ai_abbrev_pattern = re.compile(
+            r"(?<!\w)(?:AI|A\.I\.)(?!\w)"
+        )
+        self.ai_phrase_pattern = re.compile(
+            r"\b(?:artificial intelligence|machine learning|deep learning|"
+            r"large language model|large language models|llm|mô hình ngôn ngữ lớn)\b",
             re.IGNORECASE,
         )
 
@@ -147,9 +339,71 @@ class NERExtractor:
             rf"sông|núi|hồ)\s+(?:[{VI_UPPER}][{VI_LOWER}]+|\d+)"
             rf"(?:\s+(?:[{VI_UPPER}][{VI_LOWER}]+|\d+)){{0,3}}\b"
         )
+        self.dynamic_org_pattern = re.compile(
+            rf"\b(?i:(?:công ty(?:\s+cổ phần|\s+tnhh)?|tập đoàn|ngân hàng(?:\s+tmcp)?|"
+            rf"bộ|sở|cục|tổng cục|ủy ban|hội đồng|viện|trường(?:\s+đại học)?|"
+            rf"đại học|học viện|bệnh viện|quỹ))\s+"
+            rf"(?:[{VI_UPPER}][{VI_LOWER}0-9]+|[A-ZĐ]{{2,}})"
+            rf"(?:\s+(?:[{VI_UPPER}][{VI_LOWER}0-9]+|[A-ZĐ]{{2,}}|và|of|the)){{0,8}}\b"
+        )
+        self.dynamic_facility_pattern = re.compile(
+            rf"\b(?i:(?:sân bay|cảng|ga|nhà ga|bến xe|cầu|hầm|sân vận động|"
+            rf"nhà hát|trung tâm hội nghị|trung tâm triển lãm|khu công nghệ cao|"
+            rf"khu kinh tế|vườn quốc gia|bệnh viện|trường đại học|học viện))\s+"
+            rf"(?:[{VI_UPPER}][{VI_LOWER}0-9]+|[A-ZĐ]{{2,}})"
+            rf"(?:\s+(?:[{VI_UPPER}][{VI_LOWER}0-9]+|[A-ZĐ]{{2,}}|và|of|the)){{0,8}}\b"
+        )
+        self.dynamic_product_pattern = re.compile(
+            r"\b(?:iPhone|iPad|MacBook|Galaxy|Pixel|Surface|ThinkPad|Vision Pro|"
+            r"PlayStation|Xbox|GPT|Gemini|Claude|Llama|DeepSeek|Qwen|Mistral|Grok|VF)"
+            r"(?:\s+(?:[A-Z0-9][A-Za-z0-9.+-]*|Pro|Max|Mini|Plus|Air|Ultra|Fold|Flip|Series|SE|OLED)){1,4}\b"
+        )
+        self.dynamic_event_pattern = re.compile(
+            r"\b(?i:(?:world cup|euro|olympic|sea games|cop|hội nghị|diễn đàn|đại hội|"
+            r"giải vô địch|liên hoan phim))\s+"
+            rf"(?:[{VI_UPPER}][{VI_LOWER}0-9]+|\d+)"
+            rf"(?:\s+(?:[{VI_UPPER}][{VI_LOWER}0-9]+|\d+|và|of|the)){{0,6}}\b"
+        )
+        self.dynamic_law_title_pattern = re.compile(
+            rf"\b(?i:(?:luật|bộ luật|nghị định|thông tư|nghị quyết|chỉ thị|quyết định))\s+"
+            rf"(?:[{VI_UPPER}][{VI_LOWER}]+)"
+            rf"(?:\s+(?:[{VI_UPPER}][{VI_LOWER}]+|và|của|về)){{0,8}}\b"
+        )
         self.capitalized_loc_pattern = re.compile(
             r"\b(?:Mỹ|Anh|Pháp|Đức|Ý|Nga)\b"
         )
+        self.question_intent_patterns = {
+            "WHO": re.compile(r"\b(?:ai|người nào|đơn vị nào|tổ chức nào)\b", re.IGNORECASE),
+            "WHAT": re.compile(r"\b(?:gì|việc gì|điều gì|cái gì)\b", re.IGNORECASE),
+            "WHERE": re.compile(r"\b(?:ở đâu|tại đâu|nơi nào|đâu)\b", re.IGNORECASE),
+            "WHEN": re.compile(r"\b(?:khi nào|bao giờ|lúc nào)\b", re.IGNORECASE),
+            "WHY": re.compile(r"\b(?:vì sao|tại sao|do đâu)\b", re.IGNORECASE),
+            "HOW": re.compile(r"\b(?:như thế nào|ra sao|bằng cách nào)\b", re.IGNORECASE),
+            "YES_NO": re.compile(r"\b(?:có không|không|chưa)\b", re.IGNORECASE),
+        }
+        self.alias_groups = [
+            {
+                "tp hcm",
+                "tp hồ chí minh",
+                "thành phố hồ chí minh",
+                "hồ chí minh",
+                "sài gòn",
+            },
+            {"mỹ", "hoa kỳ", "usa", "united states"},
+            {"anh", "vương quốc anh", "uk", "united kingdom"},
+            {"việt nam", "vn"},
+            {"trí tuệ nhân tạo", "artificial intelligence"},
+            {"vn index", "vn-index"},
+            {"s p 500", "s&p 500"},
+        ]
+        self.alias_index = {
+            _normalize_for_match(alias): {
+                _normalize_for_match(candidate)
+                for candidate in group
+            }
+            for group in self.alias_groups
+            for alias in group
+        }
 
         self.lexicons = self._build_seed_lexicons()
         self._merge_external_lexicons()
@@ -196,6 +450,12 @@ class NERExtractor:
             "the",
             "van",
             "von",
+        }
+        self.weak_signal_tokens = {
+            token
+            for signal_type in self.WEAK_SIGNAL_TYPES
+            for phrase in self.lexicons.get(signal_type, set())
+            for token in phrase.split()
         }
 
     def _build_seed_lexicons(self) -> Dict[str, Set[str]]:
@@ -380,28 +640,73 @@ class NERExtractor:
                 cardano|ada|tron|trx|toncoin|ton|litecoin|ltc
                 """
             ),
+            "INDEX": _terms(
+                """
+                vn-index|vn30|hnx-index|upcom-index|dow jones|s&p 500|nasdaq|nikkei 225|hang seng|
+                ftse 100|dax|cac 40|kospi
+                """
+            ),
+            "TOPIC": _terms(
+                """
+                giá vàng|giá xăng|giá dầu|giá điện|giá lương thực|lãi suất|tỷ giá|chứng khoán|cổ phiếu|
+                trái phiếu|thị trường|kinh tế|lạm phát|gdp|xuất khẩu|nhập khẩu|xuất nhập khẩu|thuế|
+                ngân sách|ngân hàng|đầu tư công|giải ngân|bất động sản|nhà ở|đất nền|việc làm|tiền lương|
+                ngoại giao|quan hệ quốc tế|địa chính trị|đối ngoại|biển đảo|chủ quyền biển đảo|an ninh biển|biển đông|
+                bảo hiểm xã hội|an sinh xã hội|thời tiết|mưa lớn|mưa dông|nắng nóng|rét đậm|rét hại|
+                không khí lạnh|bão|áp thấp nhiệt đới|ngập lụt|sạt lở|hạn hán|cháy rừng|tai nạn giao thông|
+                ùn tắc giao thông|giao thông|giáo dục|học phí|thi tốt nghiệp|tuyển sinh|y tế|dịch bệnh|
+                ô nhiễm không khí|môi trường|biến đổi khí hậu|du lịch|hàng không|đường sắt|bóng đá|thể thao|
+                công nghệ|trí tuệ nhân tạo|an ninh mạng|điện thoại|ô tô|xe điện|điện lực|năng lượng tái tạo|công nghệ ai|
+                pháp luật|thương mại điện tử|tiêu dùng|bán lẻ|nông sản
+                """
+            ),
+            "ACTION": _terms(
+                """
+                công bố|ban hành|phê duyệt|đề xuất|khởi công|khánh thành|triển khai|điều tra|bắt giữ|
+                khởi tố|xét xử|cảnh báo|dự báo|ghi nhận|xác nhận|phát hiện|cập nhật|đàm phán|ký kết|
+                hợp tác|đầu tư|mở bán|ra mắt|phát hành|thu hồi|tạm dừng|gia hạn|điều chỉnh|tuyển dụng|
+                sa thải|thắng|thua|hòa|vô địch|ghi bàn|chấn thương|cứu hộ|sơ tán|khắc phục|xử phạt|
+                hỗ trợ|chuyển đổi|áp dụng|bãi bỏ|hoãn|hủy|kéo dài
+                """
+            ),
+            "TREND": _terms(
+                """
+                tăng|giảm|tăng mạnh|giảm mạnh|tăng nhẹ|giảm nhẹ|tăng vọt|lao dốc|phục hồi|đi ngang|
+                chững lại|lập đỉnh|lập đáy|cao nhất|thấp nhất|cải thiện|xấu đi|bùng nổ|suy giảm|
+                leo thang|hạ nhiệt|ổn định|biến động|tăng trưởng|sụt giảm
+                """
+            ),
+            "STATE": _terms(
+                """
+                mạnh|yếu|cao|thấp|nóng|lạnh|nghiêm trọng|khẩn cấp|tích cực|tiêu cực|bất ổn|an toàn|
+                nguy hiểm|hiếm|phổ biến|ngắn hạn|dài hạn|đột biến|đáng chú ý|nổi bật|khó khăn|thuận lợi|
+                quá tải|đủ|thiếu
+                """
+            ),
         }
 
     def _merge_external_lexicons(self) -> None:
-        lexicon_path = Path(__file__).resolve().parents[1] / "data" / "ner_lexicons.json"
-        if not lexicon_path.exists():
+        data_dir = Path(__file__).resolve().parents[1] / "data"
+        lexicon_files = sorted(data_dir.glob("ner_lexicons*.json"))
+        if not lexicon_files:
             return
 
-        try:
-            payload = json.loads(lexicon_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return
-
-        if not isinstance(payload, dict):
-            return
-
-        for entity_type, values in payload.items():
-            normalized_type = str(entity_type).upper().strip()
-            if normalized_type not in self.TYPE_ORDER or not isinstance(values, Iterable) or isinstance(values, (str, bytes)):
+        for lexicon_path in lexicon_files:
+            try:
+                payload = json.loads(lexicon_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
                 continue
-            self.lexicons.setdefault(normalized_type, set()).update(
-                str(value).strip() for value in values if str(value).strip()
-            )
+
+            if not isinstance(payload, dict):
+                continue
+
+            for entity_type, values in payload.items():
+                normalized_type = str(entity_type).upper().strip()
+                if normalized_type not in self.TYPE_ORDER or not isinstance(values, Iterable) or isinstance(values, (str, bytes)):
+                    continue
+                self.lexicons.setdefault(normalized_type, set()).update(
+                    str(value).strip() for value in values if str(value).strip()
+                )
 
     def _load_titlecase_lexicons(self) -> Dict[str, Set[str]]:
         lexicon_path = Path(__file__).resolve().parents[1] / "data" / "ner_titlecase_lexicons.json"
@@ -562,6 +867,139 @@ class NERExtractor:
 
         return found
 
+    def _extract_question_intents(self, text: str) -> List[str]:
+        return [
+            intent
+            for intent, pattern in self.question_intent_patterns.items()
+            if pattern.search(text or "")
+        ]
+
+    def _extract_residual_keywords(
+        self,
+        text: str,
+        extracted: Dict[str, List[str]],
+    ) -> List[str]:
+        normalized_tokens = _normalize_for_match(text).split()
+        covered_tokens = {
+            token
+            for values in extracted.values()
+            for phrase in values
+            for token in _normalize_for_match(phrase).split()
+        }
+
+        keywords: List[str] = []
+        seen: Set[str] = set()
+        for token in normalized_tokens:
+            if (
+                len(token) <= 1
+                or token in covered_tokens
+                or token in self.QUERY_STOPWORDS
+                or token.isdigit()
+            ):
+                continue
+            if token not in seen:
+                seen.add(token)
+                keywords.append(token)
+        return keywords
+
+    def analyze_query(self, text: str) -> Dict[str, object]:
+        """
+        Phân tích câu hỏi thành các lớp tín hiệu phục vụ tìm kiếm.
+
+        `requires_clarification=True` khi câu chỉ còn động từ/trạng thái kiểu
+        "đang tăng mạnh không?" mà không có chủ đề hay mỏ neo ngữ nghĩa nào.
+        """
+        extracted = self.extract_entities(text)
+        anchor_terms = [
+            value
+            for entity_type in self.PRIMARY_ANCHOR_TYPES
+            for value in extracted.get(entity_type, [])
+        ]
+        supporting_terms = [
+            value
+            for entity_type in self.SUPPORTING_TYPES
+            for value in extracted.get(entity_type, [])
+        ]
+        weak_terms = [
+            value
+            for entity_type in self.WEAK_SIGNAL_TYPES
+            for value in extracted.get(entity_type, [])
+        ]
+        residual_keywords = self._extract_residual_keywords(text, extracted)
+        # Nếu câu chỉ có mỏ neo quá rộng (ví dụ chỉ có "Việt Nam"), cần nâng
+        # các từ khóa chủ đề còn lại lên làm mỏ neo để tránh truy hồi lan man.
+        normalized_anchor_terms = [_normalize_for_match(value) for value in anchor_terms]
+        has_only_generic_anchor = bool(normalized_anchor_terms) and all(
+            term in self.GENERIC_ANCHOR_TERMS for term in normalized_anchor_terms
+        )
+        anchor_keywords = [
+            token
+            for token in residual_keywords
+            if token not in self.weak_signal_tokens and len(token) >= 3
+        ] if (not anchor_terms or has_only_generic_anchor) else []
+        question_intents = self._extract_question_intents(text)
+
+        def dedupe(values: Iterable[str]) -> List[str]:
+            ordered: List[str] = []
+            seen: Set[str] = set()
+            for value in values:
+                normalized = _normalize_for_match(value)
+                if normalized and normalized not in seen:
+                    seen.add(normalized)
+                    ordered.append(normalized)
+            return ordered
+
+        ordered_anchor_terms = dedupe(anchor_terms + anchor_keywords)
+        # When deciding whether a query "requires_clarification", ignore
+        # anchors that are only weak signals (e.g. TREND/ACTION/STATE tokens)
+        # because they don't provide a concrete search anchor by themselves.
+        effective_anchor_terms = [t for t in ordered_anchor_terms if t not in self.weak_signal_tokens]
+        ordered_supporting_terms = dedupe(supporting_terms)
+        ordered_weak_terms = dedupe(weak_terms)
+        ordered_residual_keywords = dedupe(residual_keywords)
+        alias_terms = dedupe(
+            alias
+            for term in ordered_anchor_terms
+            for alias in self.alias_index.get(term, set())
+        )
+        search_terms = dedupe(
+            ordered_anchor_terms
+            + alias_terms
+            + ordered_supporting_terms
+            + ordered_weak_terms
+            + ordered_residual_keywords
+        )
+        term_weights = {
+            **{term: 4.0 for term in ordered_anchor_terms},
+            **{
+                term: 3.5
+                for term in alias_terms
+                if term not in ordered_anchor_terms
+            },
+            **{term: 2.0 for term in ordered_supporting_terms},
+            **{term: 1.5 for term in ordered_weak_terms},
+            **{
+                term: 1.0
+                for term in ordered_residual_keywords
+                if term not in ordered_anchor_terms
+                and term not in ordered_supporting_terms
+                and term not in ordered_weak_terms
+            },
+        }
+
+        return {
+            "entities": extracted,
+            "anchor_terms": ordered_anchor_terms,
+            "alias_terms": alias_terms,
+            "supporting_terms": ordered_supporting_terms,
+            "weak_terms": ordered_weak_terms,
+            "residual_keywords": ordered_residual_keywords,
+            "question_intents": question_intents,
+            "search_terms": search_terms,
+            "term_weights": term_weights,
+            "requires_clarification": not effective_anchor_terms,
+        }
+
     def extract_entities(self, text: str) -> Dict[str, List[str]]:
         entities: Dict[str, Set[str]] = {entity_type: set() for entity_type in self.TYPE_ORDER}
         if not text:
@@ -577,13 +1015,35 @@ class NERExtractor:
         entities["AGE"].update(match.lower() for match in self.age_pattern.findall(text))
         entities["TEMPERATURE"].update(match.lower() for match in self.temperature_pattern.findall(text))
         entities["QUANTITY"].update(match.lower() for match in self.quantity_pattern.findall(text))
+        entities["DURATION"].update(match.lower() for match in self.duration_pattern.findall(text))
         entities["SCORE"].update(match.replace(" ", "") for match in self.score_pattern.findall(text))
         entities["LAW"].update(match.lower() for match in self.legal_document_pattern.findall(text))
+        entities["ADDRESS"].update(_normalize_for_match(match) for match in self.address_pattern.findall(text))
+        entities["IDENTIFIER"].update(match.lower() for match in self.identifier_pattern.findall(text))
+        entities["IDENTIFIER"].update(match.lower() for match in self.license_plate_pattern.findall(text))
+        entities["IDENTIFIER"].update(match.lower().replace(" ", "") for match in self.flight_code_pattern.findall(text))
+        entities["STOCK_TICKER"].update(match.lower() for match in self.stock_ticker_pattern.findall(text))
+        entities["INDEX"].update(match.lower() for match in self.index_pattern.findall(text))
+        entities["ORDINAL"].update(match.lower() for match in self.ordinal_pattern.findall(text))
+        entities["CARDINAL"].update(match.lower() for match in self.cardinal_pattern.findall(text))
+        entities["HASHTAG"].update(match.lower() for match in self.hashtag_pattern.findall(text))
+        entities["USERNAME"].update(match.lower() for match in self.username_pattern.findall(text))
+        if self.ai_abbrev_pattern.search(text):
+            entities["TOPIC"].add("ai")
+        entities["TOPIC"].update(
+            _normalize_for_match(match)
+            for match in self.ai_phrase_pattern.findall(text)
+        )
 
         entities["PERSON"].update(self.person_pattern.findall(text))
         entities["PERSON"].update(self.titled_person_pattern.findall(text))
         entities["LOC"].update(_normalize_for_match(match) for match in self.dynamic_loc_pattern.findall(text))
         entities["LOC"].update(self._extract_capitalized_single_token_locs(text))
+        entities["ORG"].update(_normalize_for_match(match) for match in self.dynamic_org_pattern.findall(text))
+        entities["FACILITY"].update(_normalize_for_match(match) for match in self.dynamic_facility_pattern.findall(text))
+        entities["PRODUCT"].update(_normalize_for_match(match) for match in self.dynamic_product_pattern.findall(text))
+        entities["EVENT"].update(_normalize_for_match(match) for match in self.dynamic_event_pattern.findall(text))
+        entities["LAW"].update(_normalize_for_match(match) for match in self.dynamic_law_title_pattern.findall(text))
 
         lexicon_matches = self._extract_lexicon_maxmatch(text)
         for entity_type, values in lexicon_matches.items():
