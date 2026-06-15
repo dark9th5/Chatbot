@@ -2,6 +2,7 @@ from etl.crawler import AsyncNewsCrawler
 import sys
 
 def main():
+    """Điểm vào chính để chạy luồng xử lý của module."""
     print("[ETL] STARTING CUSTOM ETL PIPELINE (Async)")
     print("==================================================")
     

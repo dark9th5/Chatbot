@@ -43,6 +43,9 @@ class ChatViewModel(
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
 
+    /**
+     * Đổi nguồn dữ liệu đang được chọn trên giao diện chat.
+     */
     fun setDataSource(source: ChatDataSource) {
         if (_uiState.value.selectedSource == source) return
 
@@ -55,6 +58,9 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Xóa lịch sử hội thoại hiện tại và đưa khung chat về trạng thái ban đầu.
+     */
     fun resetChat() {
         val source = _uiState.value.selectedSource
         messageHistoryBySource[source] = emptyList()
@@ -62,6 +68,9 @@ class ChatViewModel(
         _uiState.update { it.copy(messages = emptyList(), error = null) }
     }
 
+    /**
+     * Gửi câu hỏi của người dùng tới máy chủ chatbot.
+     */
     fun sendMessage(question: String) {
         if (question.isBlank()) return
 
@@ -132,10 +141,16 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Xóa thông báo lỗi đang hiển thị trên giao diện.
+     */
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
 
+    /**
+     * Cập nhật lỗi cho đúng nguồn dữ liệu đang sử dụng.
+     */
     private fun updateErrorForSource(source: ChatDataSource, error: String) {
         _uiState.update { state ->
             if (state.selectedSource == source) {
@@ -146,6 +161,9 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Thêm một tin nhắn mới vào lịch sử hội thoại.
+     */
     private fun addMessage(source: ChatDataSource, message: Message) {
         val updatedHistory = messageHistoryBySource[source].orEmpty() + message
         messageHistoryBySource[source] = updatedHistory
@@ -159,8 +177,14 @@ class ChatViewModel(
         }
     }
 
+    /**
+     * Sinh mã định danh tăng dần cho tin nhắn mới.
+     */
     private fun nextMessageId(): Long = messageIdGenerator.incrementAndGet()
 
+    /**
+     * Chuyển phản hồi API thành tin nhắn hiển thị trên giao diện.
+     */
     private fun formatBotResponse(response: ChatResponse): Message {
         val safeAnswer = response.answer.takeIf { it.isNotBlank() }
             ?: "Hiện mình chưa biết câu trả lời dựa trên dữ liệu hiện có, bạn hãy hỏi câu hỏi khác."
@@ -177,6 +201,9 @@ class ChatViewModel(
         private val repository: ChatRepository
     ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
+        /**
+         * Mô tả chức năng của hàm trong luồng xử lý Android.
+         */
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(ChatViewModel::class.java)) {
                 return ChatViewModel(repository) as T

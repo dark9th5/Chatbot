@@ -1,1 +1,0 @@
-Patch plan: modify web_admin/main.py, web_admin/templates/base.html, web_admin/templates/index.html, web_admin/utils/db.py, chatbot_api/schemas/chat.py, chatbot_api/services/chatbot_service.py to disable documents feature and force news-only.

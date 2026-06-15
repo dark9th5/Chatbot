@@ -14,6 +14,9 @@ class ChatRepository(
     private val fallbackService: ChatApiService
 ) {
 
+    /**
+     * Gửi câu hỏi của người dùng tới máy chủ chatbot.
+     */
     suspend fun sendMessage(
         question: String,
         dataSource: String,

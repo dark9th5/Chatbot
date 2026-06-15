@@ -7,7 +7,7 @@ Design Pattern: Dependency Injection (FastAPI built-in DI)
 Configuration via Environment Variables:
 - LLM_PROVIDER: 'gemini', 'openai', 'llama_cpp', 'ollama' (default: 'ollama')
 - GEMINI_API_KEY: Google Gemini API key
-- OPENAI_API_KEY: OpenAI API key  
+- OPENAI_API_KEY: OpenAI API key
 - LLAMA_CPP_MODEL_PATH: Path to GGUF model file
 """
 
@@ -20,7 +20,6 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from chatbot_api.repositories.chunk_repository import ChunkRepository
 from chatbot_api.repositories.article_repository import ArticleRepository
 from chatbot_api.services.graph_search_service import GraphSearchService
 from chatbot_api.services.chatbot_service import ChatbotService
@@ -32,12 +31,6 @@ from chatbot_api.services.llm_service import (
 # ============================================================
 # SINGLETON INSTANCES
 # ============================================================
-
-# Lấy singleton instance của ChunkRepository
-@lru_cache(maxsize=1)
-def get_chunk_repository() -> ChunkRepository:
-    """Singleton ChunkRepository (giữ lại cho backward compat)"""
-    return ChunkRepository()
 
 
 # Lấy singleton instance của ArticleRepository
@@ -98,3 +91,13 @@ def get_chatbot_service() -> ChatbotService:
         llm_service=llm_service,
         query_expansion_service=query_expansion_service
     )
+
+def clear_service_caches():
+    """
+    Xóa cache của các singleton service để ép buộc nạp lại từ điển (lexicons)
+    và các thay đổi mà không cần khởi động lại server.
+    """
+    get_article_repository.cache_clear()
+    get_graph_search_service.cache_clear()
+    get_chatbot_service.cache_clear()
+    logging.info("Service caches cleared successfully.")

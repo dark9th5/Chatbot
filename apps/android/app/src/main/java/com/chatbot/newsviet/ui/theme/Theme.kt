@@ -69,6 +69,9 @@ private val AppTypography = Typography(
 )
 
 @Composable
+/**
+ * Áp dụng bộ giao diện chung cho ứng dụng Chatbot Tin tức.
+ */
 fun NewsVietChatbotTheme(content: @Composable () -> Unit) {
     val view = LocalView.current
     if (!view.isInEditMode) {

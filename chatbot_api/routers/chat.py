@@ -81,15 +81,14 @@ def list_categories() -> CategoriesResponse:
         conn = get_db_connection()
         cursor = conn.cursor()
         
-        # 1. Chỉ lấy danh mục tin tức, không trộn lẫn file upload.
+        # 1. Chỉ lấy danh mục tin tức.
         cursor.execute(
             "SELECT DISTINCT category FROM articles "
-            "WHERE category IS NOT NULL AND link NOT LIKE %s",
-            ("upload://%",),
+            "WHERE category IS NOT NULL"
         )
         rows = cursor.fetchall()
         for row in rows:
-            if row['category'] and row['category'] != 'Tài liệu':
+            if row['category']:
                 categories.add(row['category'])
             
         conn.close()

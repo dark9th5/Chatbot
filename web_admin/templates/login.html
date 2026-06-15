@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập quản trị - NewsViet</title>
+    <link rel="stylesheet" href="/static/css/style.css?v=2.0">
+</head>
+<body class="auth-body">
+    <div class="auth-backdrop" aria-hidden="true"></div>
+    <div class="auth-aurora" aria-hidden="true"></div>
+    
+    <main class="auth-shell">
+        <!-- Left Panel: Brand -->
+        <section class="auth-brand-panel" aria-label="NewsViet Admin Brand">
+            <div class="auth-brand-header">
+                <div class="auth-brand-logo">
+                    <svg viewBox="0 0 100 100" class="logo-svg">
+                        <defs>
+                            <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#06b6d4" />
+                                <stop offset="50%" stop-color="#3b82f6" />
+                                <stop offset="100%" stop-color="#8b5cf6" />
+                            </linearGradient>
+                            <filter id="logoGlow">
+                                <feGaussianBlur stdDeviation="5" result="blur" />
+                                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                            </filter>
+                        </defs>
+                        <polygon points="50,5 90,25 90,75 50,95 10,75 10,25" fill="url(#logoGrad)" filter="url(#logoGlow)" />
+                        <text x="50" y="62" font-family="'Inter', sans-serif" font-weight="900" font-size="36" fill="#0f172a" text-anchor="middle">NV</text>
+                    </svg>
+                </div>
+                <div class="auth-brand-text">
+                    <p class="auth-kicker">NewsViet Dashboard</p>
+                    <h1>Hệ thống<br>Quản trị Tin tức</h1>
+                    <p class="auth-copy">Nền tảng quản lý tin tức và dữ liệu chatbot thông minh chuyên nghiệp.</p>
+                </div>
+            </div>
+            
+            <div class="auth-status-row">
+                <span class="auth-status-dot-container">
+                    <span class="auth-status-dot"></span>
+                    <span class="auth-status-pulse"></span>
+                </span>
+                <span>Hệ thống sẵn sàng phục vụ</span>
+            </div>
+        </section>
+
+        <!-- Right Panel: Login Form -->
+        <section class="auth-card">
+            <div class="auth-heading">
+                <p class="auth-kicker">Cổng đăng nhập</p>
+                <h2>Truy cập Quản trị</h2>
+            </div>
+
+            {% if error %}
+            <div class="auth-error-container">
+                <svg class="auth-error-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="8" x2="12" y2="12"></line>
+                    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span class="auth-error">{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form method="post" action="/login" class="auth-form" id="loginForm">
+                <input type="hidden" name="next" value="{{ next }}">
+
+                <!-- Username Field -->
+                <div class="form-group">
+                    <label for="username">Tài khoản quản trị</label>
+                    <div class="auth-input-wrap">
+                        <span class="auth-input-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="12" cy="7" r="4"></circle>
+                            </svg>
+                        </span>
+                        <input id="username" name="username" type="text" autocomplete="username" placeholder="Nhập tên tài khoản..." required autofocus>
+                    </div>
+                </div>
+
+                <!-- Password Field -->
+                <div class="form-group">
+                    <label for="password">Mật khẩu</label>
+                    <div class="auth-input-wrap">
+                        <span class="auth-input-icon">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                            </svg>
+                        </span>
+                        <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Nhập mật khẩu..." required>
+                        <button type="button" class="password-toggle-btn" id="togglePassword" aria-label="Hiển thị mật khẩu">
+                            <!-- eye icon -->
+                            <svg class="eye-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                                <circle cx="12" cy="12" r="3"></circle>
+                            </svg>
+                            <!-- eye-off icon -->
+                            <svg class="eye-off-icon" style="display:none;" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                                <line x1="1" y1="1" x2="23" y2="23"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary auth-submit" id="submitBtn">
+                    <span class="btn-text">Đăng nhập</span>
+                    <span class="btn-spinner" style="display: none;">
+                        <svg class="spinner-svg" viewBox="0 0 50 50">
+                            <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle>
+                        </svg>
+                    </span>
+                </button>
+            </form>
+        </section>
+    </main>
+
+    <script>
+        // Password Visibility Toggle
+        const toggleBtn = document.getElementById('togglePassword');
+        const passwordInput = document.getElementById('password');
+        const eyeIcon = toggleBtn.querySelector('.eye-icon');
+        const eyeOffIcon = toggleBtn.querySelector('.eye-off-icon');
+
+        toggleBtn.addEventListener('click', function() {
+            const isPassword = passwordInput.getAttribute('type') === 'password';
+            passwordInput.setAttribute('type', isPassword ? 'text' : 'password');
+            
+            if (isPassword) {
+                eyeIcon.style.display = 'none';
+                eyeOffIcon.style.display = 'block';
+                toggleBtn.setAttribute('aria-label', 'Ẩn mật khẩu');
+            } else {
+                eyeIcon.style.display = 'block';
+                eyeOffIcon.style.display = 'none';
+                toggleBtn.setAttribute('aria-label', 'Hiển thị mật khẩu');
+            }
+        });
+
+        // Form Submit Loading Effect
+        const form = document.getElementById('loginForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = submitBtn.querySelector('.btn-text');
+        const btnSpinner = submitBtn.querySelector('.btn-spinner');
+
+        form.addEventListener('submit', function() {
+            submitBtn.disabled = true;
+            btnText.style.opacity = '0.5';
+            btnSpinner.style.display = 'block';
+        });
+    </script>
+</body>
+</html>

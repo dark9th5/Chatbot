@@ -6,6 +6,8 @@ from typing import Optional
 import time
 import random
 
+from etl.content_cleaner import strip_article_boilerplate
+
 class BaseExtractor(ABC):
     """Abstract Base Class cho việc trích xuất nội dung bài viết"""
     
@@ -15,9 +17,11 @@ class BaseExtractor(ABC):
 
     @abstractmethod
     def extract(self, url: str) -> Optional[str]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         pass
 
     def _get_soup(self, url: str, retries: int = 3) -> Optional[BeautifulSoup]:
+        """Lấy dữ liệu nội bộ phục vụ xử lý trong module."""
         for i in range(retries):
             try:
                 time.sleep(random.uniform(1.0, 3.0))
@@ -40,10 +44,11 @@ class BaseExtractor(ABC):
         return None
 
     def _clean_text(self, text: str) -> str:
+        """Làm sạch nội bộ cho dữ liệu văn bản."""
         if not text: return ""
         text = re.sub(r'\n{3,}', '\n\n', text)
         text = re.sub(r' {2,}', ' ', text)
-        return text.strip()
+        return strip_article_boilerplate(text)
 
     def _remove_noise(self, soup: BeautifulSoup):
         """Xóa các thẻ rác khỏi cây HTML chung"""
@@ -56,6 +61,7 @@ class BaseExtractor(ABC):
 
 class VnExpressExtractor(BaseExtractor):
     def extract(self, url: str) -> Optional[str]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         soup = self._get_soup(url)
         if not soup: return None
         try:
@@ -71,6 +77,7 @@ class VnExpressExtractor(BaseExtractor):
 
 class DantriExtractor(BaseExtractor):
     def extract(self, url: str) -> Optional[str]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         soup = self._get_soup(url)
         if not soup: return None
         try:
@@ -91,6 +98,7 @@ class GenericReadabilityExtractor(BaseExtractor):
     Thuật toán: Tìm khối thẻ <div>, <article> có tỷ lệ text / tag cao nhất.
     """
     def extract(self, url: str) -> Optional[str]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         soup = self._get_soup(url)
         if not soup: return None
         
@@ -138,6 +146,7 @@ class ExtractorFactory:
     """Factory để lấy Extractor phù hợp dựa trên URL/Source"""
     @staticmethod
     def get_extractor(url: str) -> Optional[BaseExtractor]:
+        """Lấy dữ liệu cần thiết cho luồng xử lý."""
         if 'vnexpress.net' in url:
             return VnExpressExtractor()
         elif 'dantri.com.vn' in url:

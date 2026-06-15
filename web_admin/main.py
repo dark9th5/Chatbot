@@ -3,7 +3,8 @@ Main FastAPI Application - Web Admin + Chatbot API
 """
 
 import os
-from fastapi import FastAPI
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,7 +14,10 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-from web_admin.routes import news
+load_dotenv()
+
+from web_admin.routes import auth, news
+from web_admin.utils.auth import require_admin
 from chatbot_api.routers import chat as chatbot_router
 
 
@@ -47,6 +51,7 @@ templates = Jinja2Templates(directory="web_admin/templates")
 
 # Include routers
 app.include_router(chatbot_router.router)  # /api/chat, /api/health, /api/categories
+app.include_router(auth.router, tags=["Auth"])
 app.include_router(news.router, tags=["News"])
 
 
@@ -95,7 +100,7 @@ async def public_config():
     }
 
 
-@app.get("/_debug_env")
+@app.get("/_debug_env", dependencies=[Depends(require_admin)])
 async def _debug_env():
     """Debug endpoint to inspect PUBLIC_BASE_URL values at runtime."""
     return {
@@ -104,7 +109,7 @@ async def _debug_env():
     }
 
 
-@app.get("/_debug_graph_types")
+@app.get("/_debug_graph_types", dependencies=[Depends(require_admin)])
 async def _debug_graph_types():
     """Return counts of entity types in graph_entities for debugging."""
     try:

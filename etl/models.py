@@ -15,6 +15,7 @@ class Article:
 
     # Chuyển đổi đối tượng Article thành dictionary để dễ dàng xử lý (JSON/API)
     def to_dict(self):
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         return {
             "title": self.title,
             "link": self.link,

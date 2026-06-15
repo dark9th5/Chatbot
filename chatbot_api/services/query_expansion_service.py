@@ -9,6 +9,7 @@ class QueryExpansionService:
 
     # Khởi tạo dịch vụ mở rộng truy vấn với LLM Service
     def __init__(self, llm_service: LLMService):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self.llm_service = llm_service
 
     # Viết lại câu hỏi gốc để rõ nghĩa và hiệu quả hơn khi tìm kiếm

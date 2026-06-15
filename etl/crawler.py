@@ -6,7 +6,6 @@ from .rss_parser import CustomRSSParser
 from .extractors import ExtractorFactory
 from .loader import DatabaseLoader
 from .deduplicator import JaccardDeduplicator
-from .text_summarizer import TextRankSummarizer
 
 class AsyncNewsCrawler:
     """
@@ -14,7 +13,7 @@ class AsyncNewsCrawler:
     Quy trình: Fetch RSS -> Parse XML -> Fetch Full Content (Async) -> Save DB.
     """
     
-    # Cấu hình nguồn tin (Copy từ rss_collector_full.py)
+    # Cấu hình nguồn tin
     RSS_SOURCES = {
         'vnexpress': {
             'name': 'VnExpress',
@@ -65,13 +64,13 @@ class AsyncNewsCrawler:
 
     # Khởi tạo Crawler với số lượng luồng worker mặc định là 2
     def __init__(self, max_workers: int = 2):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self.max_workers = max_workers
         self.parser = CustomRSSParser()
         self.loader = DatabaseLoader()
         self.executor = ThreadPoolExecutor(max_workers=max_workers)
         # Khởi tạo bộ Deduplication lọc n-gram (Copy)
         self.deduplicator = JaccardDeduplicator(threshold=0.85)
-        self.summarizer = TextRankSummarizer()
 
     # Xử lý lấy nội dung chi tiết của một bài báo (chạy trong thread)
     def process_article_content(self, article: Article) -> Article:
@@ -82,8 +81,6 @@ class AsyncNewsCrawler:
                 full_content = extractor.extract(article.link)
                 if full_content:
                     article.content = full_content
-                    # Tự động tóm tắt 3 câu cốt lõi (TextRank)
-                    article.summary = self.summarizer.summarize(full_content, top_k=3)
         except Exception as e:
             print(f"  [Error] Error extracting content for {article.link}: {e}")
         return article
@@ -125,7 +122,7 @@ class AsyncNewsCrawler:
         return final_articles
 
     # Khởi chạy toàn bộ quy trình thu thập tin tức từ tất cả các nguồn
-    def run(self):
+    def run(self, feed_limit: int = 50):
         """Chạy toàn bộ quy trình Crawl"""
         print(f"[Crawler] Starting Async Crawler (Workers={self.max_workers})...")
         start_time = time.time()
@@ -136,7 +133,7 @@ class AsyncNewsCrawler:
             
             for category, urls in source_info['categories'].items():
                 for url in urls:
-                    articles = self.crawl_feed(url, source_name, category)
+                    articles = self.crawl_feed(url, source_name, category, limit=feed_limit)
                     
                     if articles:
                         # 3. Save to DB (Bulk Insert)
@@ -152,4 +149,5 @@ class AsyncNewsCrawler:
 
     # Đóng bộ thực thi luồng khi hoàn tất
     def shutdown(self):
+        """Dừng các tài nguyên nền trước khi kết thúc chương trình."""
         self.executor.shutdown(wait=True)

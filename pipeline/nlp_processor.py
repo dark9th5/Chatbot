@@ -16,6 +16,7 @@ from pipeline.config import MYSQL_CONFIG
 
 # Tạo kết nối đến cơ sở dữ liệu MySQL dựa trên cấu hình đã thiết lập
 def _get_connection():
+    """Lấy dữ liệu nội bộ phục vụ xử lý trong module."""
     return pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
 
 
@@ -70,6 +71,7 @@ import os
 
 # Tải danh sách các từ dừng (stop words) tùy chỉnh từ file văn bản
 def load_custom_stopwords():
+    """Nạp dữ liệu đầu vào phục vụ quá trình xử lý."""
     try:
         base_dir = os.path.dirname(os.path.dirname(__file__))
         path = os.path.join(base_dir, "data", "vietnamese-stopwords.txt")
@@ -161,6 +163,7 @@ class CustomVietnameseTokenizer:
     """
     def __init__(self):
         # Từ điển các từ ghép phổ biến (Có thể mở rộng thêm)
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self.dictionary = {
             "học sinh", "sinh viên", "giáo viên", "công nghệ", "thông tin",
             "kinh tế", "việt nam", "thế giới", "thời tiết", "dự báo",

@@ -37,6 +37,7 @@ class ChatbotService:
         llm_service: LLMService,
         query_expansion_service: QueryExpansionService
     ):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self._graph_service = graph_search_service
         self._article_repo = article_repository
         self._llm_service = llm_service
@@ -292,6 +293,7 @@ class ChatbotService:
 
     @staticmethod
     def _answer_indicates_no_info(answer: str) -> bool:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         lowered = (answer or "").casefold()
         return any(
             marker in lowered
@@ -442,15 +444,6 @@ class ChatbotService:
             if len(scored_chunks) > 1 and scored_chunks[1][2] > 0:
                 selected_indices.append(scored_chunks[1][0])
 
-            if data_source == "documents":
-                expanded_indices = set(selected_indices)
-                for index in list(selected_indices):
-                    if index - 1 >= 0:
-                        expanded_indices.add(index - 1)
-                    if index + 1 < len(chunks):
-                        expanded_indices.add(index + 1)
-                selected_indices = sorted(expanded_indices)[:4]
-
             top_chunks = [chunks[index] for index in selected_indices]
 
             # Ghép nội dung các top chunks được chọn
@@ -594,6 +587,7 @@ class ChatbotService:
             return None
 
     def _extract_explicit_date_label(self, question: str) -> Optional[str]:
+        """Trích xuất dữ liệu nội bộ phục vụ phân tích."""
         explicit_date = self._extract_explicit_date(question)
         if explicit_date is None:
             return None
@@ -602,6 +596,7 @@ class ChatbotService:
 
     @staticmethod
     def _date_text_variants(target_date: date) -> tuple[str, ...]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         day = target_date.day
         month = target_date.month
         year = target_date.year
@@ -666,134 +661,7 @@ class ChatbotService:
                     continue
         return None
 
-    @staticmethod
-    def _document_answer_needs_fallback(answer: str, results: List[dict]) -> bool:
-        lowered = answer.casefold()
-        if any(
-            marker in lowered
-            for marker in ("[câu hỏi]", "[ngữ cảnh]", "trả lời:")
-        ):
-            return True
 
-        if "không tìm thấy" in lowered:
-            return False
-
-        combined_content = "\n".join(
-            item.get("content", "")
-            for item in results
-            if item.get("content")
-        )
-        return ChatbotService._document_grounding_ratio(answer, combined_content) < 0.65
-
-    def _build_document_fallback_answer(
-        self,
-        results: List[dict],
-        question: str,
-    ) -> str:
-        combined_content = "\n".join(
-            item.get("content", "")
-            for item in results
-            if item.get("content")
-        )
-        q = question.casefold()
-
-        if any(term in q for term in ("kỹ năng", "skills")):
-            snippet = self._extract_document_section(combined_content, "skills")
-            if snippet:
-                return f"Theo tài liệu, phần kỹ năng ghi: {snippet}"
-
-        if any(term in q for term in ("học trường", "trường nào", "học ở đâu", "education")):
-            snippet = self._extract_document_section(combined_content, "education")
-            if snippet:
-                return f"Theo tài liệu, phần học vấn ghi: {self._clean_education_snippet(snippet)}"
-
-        if "tóm tắt" in q:
-            snippet = self._summarize_document_head(combined_content)
-            if snippet:
-                return f"Tóm tắt từ tài liệu: {snippet}"
-
-        return "Tôi không tìm thấy thông tin này trong các tài liệu đã upload"
-
-    @staticmethod
-    def _extract_document_section(content: str, section_name: str, max_lines: int = 8) -> str:
-        lines = [line.strip() for line in content.splitlines()]
-        lowered_section = section_name.casefold()
-
-        for index, line in enumerate(lines):
-            if line.casefold() == lowered_section:
-                candidates = [
-                    candidate
-                    for candidate in lines[index + 1:index + 1 + max_lines + 6]
-                    if candidate
-                ]
-
-                if lowered_section == "education":
-                    snippet_lines = [
-                        candidate
-                        for candidate in candidates
-                        if (
-                            re.search(r"\b20\d{2}\s*-\s*20\d{2}\b", candidate)
-                            or any(
-                                token in candidate.casefold()
-                                for token in (
-                                    "information technology",
-                                    "academy",
-                                    "university",
-                                    "college",
-                                    "techniques",
-                                )
-                            )
-                        )
-                    ]
-                elif lowered_section == "skills":
-                    snippet_lines = [
-                        candidate
-                        for candidate in candidates
-                        if any(
-                            token in candidate.casefold()
-                            for token in (
-                                "languages & android core",
-                                "ui & architecture",
-                                "asynchrony & data handling",
-                                "tools & optimization",
-                                "soft skills",
-                            )
-                        )
-                    ]
-                else:
-                    snippet_lines = candidates[:max_lines]
-
-                return " ".join(snippet_lines).replace("\x00", "")
-
-        return ""
-
-    @staticmethod
-    def _summarize_document_head(content: str, max_chars: int = 320) -> str:
-        cleaned = re.sub(r"\s+", " ", content.replace("\x00", " ")).strip()
-        if not cleaned:
-            return ""
-        return cleaned[:max_chars].rstrip() + ("..." if len(cleaned) > max_chars else "")
-
-    @staticmethod
-    def _clean_education_snippet(snippet: str) -> str:
-        if "The Academy of Cryptography" in snippet and "Techniques" in snippet:
-            year_match = re.search(r"\b20\d{2}\s*-\s*20\d{2}\b", snippet)
-            parts = ["Information Technology"]
-            if year_match:
-                parts.append(year_match.group(0))
-            parts.append("The Academy of Cryptography Techniques")
-            return "; ".join(parts)
-
-        return snippet
-
-    @staticmethod
-    def _document_grounding_ratio(answer: str, content: str) -> float:
-        answer_tokens = set(re.findall(r"\w+", answer.casefold(), flags=re.UNICODE))
-        if not answer_tokens:
-            return 0.0
-
-        content_tokens = set(re.findall(r"\w+", content.casefold(), flags=re.UNICODE))
-        return len(answer_tokens & content_tokens) / len(answer_tokens)
 
     @staticmethod
     def _anchor_answer_to_explicit_date(answer: str, explicit_date_label: Optional[str]) -> str:

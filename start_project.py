@@ -34,6 +34,7 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 def print_banner():
+    """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
     banner = f"""
 {BLUE}{BOLD}========================================================================{RESET}
 {CYAN}{BOLD}               NEWS CHATBOT SYSTEM - UNIFIED RUNNER v2.0               {RESET}
@@ -218,6 +219,7 @@ def run_server(public_url: str):
 
 def main():
     # Force output to support UTF-8 if available
+    """Điểm vào chính để chạy luồng xử lý của module."""
     try:
         sys.stdout.reconfigure(encoding='utf-8')
     except Exception:

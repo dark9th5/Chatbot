@@ -21,6 +21,9 @@ class ChatApplication : Application() {
     lateinit var chatRepository: ChatRepository
         private set
 
+    /**
+     * Khởi tạo màn hình hoặc ứng dụng Android và gắn các phụ thuộc cần thiết.
+     */
     override fun onCreate() {
         super.onCreate()
 
@@ -51,6 +54,9 @@ class ChatApplication : Application() {
         chatRepository = ChatRepository(primaryApiService, fallbackApiService)
     }
 
+    /**
+     * Tạo dịch vụ API Retrofit dùng chung cho ứng dụng.
+     */
     private fun createApiService(baseUrl: String, httpClient: OkHttpClient): ChatApiService {
         val retrofit = Retrofit.Builder()
             .baseUrl(baseUrl)

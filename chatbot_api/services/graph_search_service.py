@@ -23,18 +23,21 @@ from pipeline.config import MYSQL_CONFIG
 
 class GraphSearchService:
     def __init__(self):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self.ner = NERExtractor()
         self._conn = None
         self.last_query_analysis: Dict[str, Any] = {}
 
     @property
     def conn(self):
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         if self._conn is None or not self._conn.open:
             self._conn = pymysql.connect(**MYSQL_CONFIG, cursorclass=pymysql.cursors.DictCursor)
         return self._conn
 
     @staticmethod
     def _dedupe(values: Iterable[str]) -> List[str]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         ordered: List[str] = []
         seen = set()
         for value in values:
@@ -73,6 +76,7 @@ class GraphSearchService:
 
     @staticmethod
     def _explicit_date_variants(target_date: date) -> List[str]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         return GraphSearchService._dedupe(
             [
                 f"{target_date.day}/{target_date.month}",
@@ -94,6 +98,7 @@ class GraphSearchService:
         from_date: Optional[date],
         to_date: Optional[date],
     ) -> List[Dict[str, Any]]:
+        """Tìm kiếm nội bộ trong một nguồn dữ liệu cụ thể."""
         if not terms:
             return []
 
@@ -161,6 +166,7 @@ class GraphSearchService:
         from_date: Optional[date],
         to_date: Optional[date],
     ) -> List[Dict[str, Any]]:
+        """Tìm kiếm nội bộ trong một nguồn dữ liệu cụ thể."""
         if not terms:
             return []
 
@@ -391,14 +397,11 @@ class GraphSearchService:
         from_date: Optional[date],
         to_date: Optional[date],
     ) -> tuple[str, List[Any]]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         clauses: List[str] = []
         params: List[Any] = []
 
-        if data_source == "documents":
-            clauses.append("a.link LIKE %s")
-        else:
-            clauses.append("a.link NOT LIKE %s")
-        params.append("upload://%")
+        # Không cần lọc link dạng upload://% vì tính năng upload tài liệu đã được gỡ bỏ hoàn toàn
         if category and category.strip():
             clauses.append("a.category = %s")
             params.append(category.strip())
@@ -418,6 +421,7 @@ class GraphSearchService:
 
     @staticmethod
     def _merge_results(*batches: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Xử lý một phần nghiệp vụ của module theo tham số đầu vào."""
         merged: Dict[Any, Dict[str, Any]] = {}
         for batch in batches:
             for item in batch:
@@ -514,5 +518,6 @@ class GraphSearchService:
         return self._merge_results(graph_results, keyword_results)[:limit]
 
     def close(self):
+        """Đóng tài nguyên đang mở để giải phóng kết nối."""
         if self._conn:
             self._conn.close()

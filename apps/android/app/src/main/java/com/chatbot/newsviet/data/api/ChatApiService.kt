@@ -26,6 +26,9 @@ interface ChatApiService {
      * - data_source: Nguồn dữ liệu đang hỏi (news/documents)
      */
     @POST("api/chat")
+    /**
+     * Gửi câu hỏi của người dùng tới máy chủ chatbot.
+     */
     suspend fun sendMessage(@Body request: ChatRequest): ChatResponse
 
 }

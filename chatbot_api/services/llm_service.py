@@ -39,6 +39,7 @@ class GroqProvider(LLMProvider):
     
     # Khởi tạo Groq Provider với API Key và tên model
     def __init__(self, api_key: str, model_name: str = "llama-3.3-70b-versatile"):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         if not api_key:
             raise ValueError("Groq API Key is required")
         try:
@@ -51,6 +52,7 @@ class GroqProvider(LLMProvider):
     # Trả về tên nhà cung cấp Groq cùng với model đang dùng
     @property
     def provider_name(self) -> str:
+        """Trả về tên nhà cung cấp mô hình đang sử dụng."""
         return f"Groq ({self.model_name})"
 
     # Sinh câu trả lời bằng cách gọi API của Groq
@@ -61,6 +63,7 @@ class GroqProvider(LLMProvider):
         source_label: str,
         reference_date: Optional[str] = None,
     ) -> str:
+        """Sinh nội dung phản hồi dựa trên dữ liệu đầu vào."""
         date_instruction = (
             f'7. Người dùng đang hỏi về ngày "{reference_date}". Nếu ngữ cảnh có từ tương đối như "hôm nay", '
             f'phải quy chiếu theo ngày nguồn và khi trả lời hãy dùng "{reference_date}" thay vì "hôm nay".'
@@ -105,6 +108,7 @@ class HuggingFaceProvider(LLMProvider):
     
     # Khởi tạo HuggingFace Provider với API Key và ID model
     def __init__(self, api_key: str, model_id: str = "mistralai/Mistral-7B-Instruct-v0.3"):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self.api_key = api_key
         self.model_id = model_id
         try:
@@ -116,6 +120,7 @@ class HuggingFaceProvider(LLMProvider):
     # Trả về tên nhà cung cấp HuggingFace cùng với model ID
     @property
     def provider_name(self) -> str:
+        """Trả về tên nhà cung cấp mô hình đang sử dụng."""
         return f"HuggingFace ({self.model_id})"
 
     # Sinh câu trả lời bằng cách gọi Inference API của HuggingFace
@@ -126,6 +131,7 @@ class HuggingFaceProvider(LLMProvider):
         source_label: str,
         reference_date: Optional[str] = None,
     ) -> str:
+        """Sinh nội dung phản hồi dựa trên dữ liệu đầu vào."""
         date_instruction = (
             f'If the user asks about "{reference_date}", answer with that absolute date and do not call it "today".'
             if reference_date
@@ -164,6 +170,7 @@ class FallbackLLMProvider(LLMProvider):
     # Trả về tên của cả provider chính và provider dự phòng
     @property
     def provider_name(self) -> str:
+        """Trả về tên nhà cung cấp mô hình đang sử dụng."""
         fallback_info = f" + Fallback({self.fallback.provider_name})" if self.fallback else ""
         return f"{self.primary.provider_name}{fallback_info}"
 
@@ -212,6 +219,7 @@ class LLMService:
     
     # Khởi tạo LLM Service wrapper với một provider cụ thể
     def __init__(self, provider: LLMProvider):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self.provider = provider
         logger.info(f"LLMService initialized with provider: {provider.provider_name}")
         

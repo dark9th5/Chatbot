@@ -21,6 +21,9 @@ class ChatActivity : ComponentActivity() {
         ChatViewModel.Factory(app.chatRepository)
     }
 
+    /**
+     * Khởi tạo màn hình hoặc ứng dụng Android và gắn các phụ thuộc cần thiết.
+     */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {

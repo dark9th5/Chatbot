@@ -1,34 +1,671 @@
 {% extends "base.html" %}
 
-{% block title %}{{ news.title }} - News Chatbot Admin{% endblock %}
+{% block title %}{{ news.title }} - Quản trị Chatbot Tin tức{% endblock %}
+
+{% block extra_css %}
+<style>
+    .detail-container {
+        display: grid;
+        grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+        gap: 2rem;
+        margin-top: 1.5rem;
+    }
+
+    @media (max-width: 992px) {
+        .detail-container {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .panel-side {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+    }
+
+    .relations-card {
+        background: var(--white);
+        padding: 1.5rem;
+        border-radius: var(--radius);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .entity-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .entity-chip,
+    .relation-node {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        border-radius: 4px;
+        padding: 0.25rem 0.45rem;
+        font-size: 0.78rem;
+        font-weight: 700;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+    }
+
+    .entity-label {
+        font-size: 0.68rem;
+        font-weight: 800;
+        opacity: 0.75;
+    }
+
+    .type-person { background-color: #fecaca; color: #991b1b; }
+    .type-org { background-color: #dbeafe; color: #1e40af; }
+    .type-loc { background-color: #d1fae5; color: #065f46; }
+    .type-job { background-color: #fef3c7; color: #92400e; }
+    .type-product { background-color: #f3e8ff; color: #6b21a8; }
+    .type-event { background-color: #e0f2fe; color: #075985; }
+    .type-law { background-color: #ffedd5; color: #9a3412; }
+    .type-disease { background-color: #fee2e2; color: #9f1239; }
+    .type-money { background-color: #ecfdf5; color: #047857; }
+    .type-date { background-color: #fff1f2; color: #be123c; }
+    .type-percent { background-color: #e0e7ff; color: #3730a3; }
+    .type-phone { background-color: #ccfbf1; color: #115e59; }
+    .type-email { background-color: #ede9fe; color: #5b21b6; }
+    .type-url { background-color: #f1f5f9; color: #0f172a; }
+    .type-age { background-color: #ffe4e6; color: #9f1239; }
+    .type-temp { background-color: #ffedd5; color: #c2410c; }
+    .type-quantity { background-color: #f0fdf4; color: #166534; }
+    .type-score { background-color: #f1f5f9; color: #334155; }
+    .type-facility { background-color: #e0f2fe; color: #0369a1; }
+    .type-vehicle { background-color: #fef3c7; color: #78350f; }
+    .type-award { background-color: #fef9c3; color: #854d0e; }
+    .type-sport { background-color: #e0f2fe; color: #1e3a8a; }
+    .type-art { background-color: #fdf4ff; color: #86198f; }
+    .type-lang { background-color: #f0f9ff; color: #075985; }
+    .type-nat { background-color: #f0fdfa; color: #115e59; }
+    .type-crypto { background-color: #ecfccb; color: #3f6212; }
+    .type-address { background-color: #fef3c7; color: #78350f; }
+    .type-id { background-color: #f3f4f6; color: #1f2937; }
+    .type-ticker { background-color: #ecfeff; color: #0891b2; }
+    .type-index { background-color: #fdf2f8; color: #9d174d; }
+    .type-topic { background-color: #eff6ff; color: #1e40af; }
+    .type-action { background-color: #fef2f2; color: #991b1b; }
+    .type-trend { background-color: #f0fdf4; color: #166534; }
+    .type-state { background-color: #faf5ff; color: #6b21a8; }
+    .type-default { background-color: #f3f4f6; color: #374151; }
+
+    .relation-triple {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        background: var(--light);
+        padding: 0.75rem;
+        border-radius: var(--radius-sm);
+        margin-bottom: 0.75rem;
+        border-left: 4px solid var(--primary);
+        font-size: 0.85rem;
+        flex-wrap: wrap;
+    }
+
+    .relation-edge {
+        color: var(--secondary);
+        font-weight: 800;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 1.25rem;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        background: var(--light);
+        border-radius: var(--radius-sm);
+    }
+
+    .content-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: #fafafa;
+        border: 1px solid #e5e7eb;
+        border-radius: var(--radius-sm);
+        line-height: 1.85;
+        font-size: 1.02rem;
+        padding: 1.25rem;
+    }
+
+    .more-graph-button {
+        width: 100%;
+        margin-top: 0.75rem;
+        justify-content: center;
+    }
+
+    .inline-entity {
+        border-radius: 4px;
+        cursor: help;
+        font-weight: 700;
+        padding: 0.05rem 0.18rem;
+        position: relative;
+        text-decoration-thickness: 2px;
+        text-underline-offset: 3px;
+    }
+
+    .inline-entity.has-relation {
+        text-decoration-line: underline;
+        text-decoration-style: solid;
+    }
+
+    .inline-entity.has-attribute {
+        box-shadow: inset 0 -2px 0 rgba(124, 58, 237, 0.45);
+    }
+
+    .inline-entity::after {
+        background: #111827;
+        border-radius: 6px;
+        bottom: calc(100% + 0.45rem);
+        color: #ffffff;
+        content: attr(data-tooltip);
+        display: none;
+        font-size: 0.72rem;
+        font-weight: 500;
+        left: 0;
+        line-height: 1.45;
+        max-width: 320px;
+        min-width: 180px;
+        padding: 0.55rem 0.7rem;
+        position: absolute;
+        white-space: pre-line;
+        width: max-content;
+        z-index: 20;
+    }
+
+    .inline-entity:hover::after,
+    .inline-entity:focus::after {
+        display: block;
+    }
+
+    .annotation-legend {
+        align-items: center;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+    }
+
+    .legend-pill {
+        background: #f3f4f6;
+        border: 1px solid #e5e7eb;
+        border-radius: 4px;
+        color: var(--text-muted);
+        font-size: 0.75rem;
+        font-weight: 700;
+        padding: 0.25rem 0.45rem;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <div class="news-detail-page">
-    <a href="/news" class="btn btn-sm">← Quay lại</a>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; gap: 1rem; flex-wrap: wrap;">
+        <a href="/news" class="btn" style="background: var(--glass-bg); color: var(--text); border: 1px solid var(--glass-border);">
+            Quay lại danh sách
+        </a>
+        <a href="{{ news.link }}" target="_blank" class="btn btn-primary">
+            Xem bài viết gốc
+        </a>
+    </div>
 
-    <article class="news-detail">
-        <header class="news-header">
-            <h1 class="news-title">{{ news.title }}</h1>
-            <div class="news-meta">
-                <span class="badge">{{ news.source }}</span>
-                <span>📅 {{ news.published_date }}</span>
-                <span>📏 {{ news.content|length }} ký tự</span>
+    <div class="detail-container">
+        <article class="news-detail" style="margin-top: 0; padding: 2rem;">
+            <header class="news-header" style="border-bottom: 1px solid var(--border); padding-bottom: 1.5rem; margin-bottom: 1.5rem;">
+                <h1 class="news-title" style="font-size: 1.75rem; margin-bottom: 1rem;">{{ news.title }}</h1>
+                <div class="news-meta" style="display: flex; gap: 1rem; flex-wrap: wrap; font-size: 0.85rem;">
+                    <span class="badge">{{ news.source }}</span>
+                    <span>{{ news.published_date }}</span>
+                    <span>{{ news.content|length }} ký tự</span>
+                </div>
+            </header>
+
+            <div class="news-content">
+                <h3 style="margin-bottom: 1rem; color: var(--dark);">Nội dung bài báo</h3>
+                <div class="annotation-legend" aria-label="Chú giải annotation trong nội dung">
+                    <span class="legend-pill">Màu nền: NER</span>
+                    <span class="legend-pill">Gạch dưới: có quan hệ</span>
+                    <span class="legend-pill">Viền tím: có thuộc tính</span>
+                </div>
+                <div class="content-text">{{ news.content }}</div>
             </div>
-        </header>
+        </article>
 
-        <div class="news-content">
-            <h3>Nội dung đầy đủ:</h3>
-            <div class="content-text">
-                {{ news.content|replace('\n\n', '</p>
-                <p>')|safe }}
+        <div class="panel-side">
+            <div class="relations-card">
+                <h3 style="margin-bottom: 1rem; font-size: 1.15rem; color: var(--dark);">Thực thể đã nhận diện</h3>
+                <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 1.25rem;">
+                    Đọc từ graph đã lưu sẵn, không chạy lại NER khi mở trang.
+                </p>
+                <div id="entities-list" class="entity-list"></div>
+            </div>
+
+            <div class="relations-card">
+                <h3 style="margin-bottom: 1rem; font-size: 1.15rem; color: var(--dark);">Mối quan hệ trích xuất</h3>
+                <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 1.25rem;">
+                    Các bộ ba chủ thể - quan hệ - đối tượng đã lưu trong MySQL.
+                </p>
+                <div id="relations-list"></div>
+            </div>
+
+            <div class="relations-card">
+                <h3 style="margin-bottom: 1rem; font-size: 1.15rem; color: var(--dark);">Thuộc tính thực thể</h3>
+                <p class="text-muted" style="font-size: 0.8rem; margin-bottom: 1.25rem;">
+                    Các trạng thái hoặc xu hướng mô tả thực thể trong bài báo.
+                </p>
+                <div id="attributes-list"></div>
             </div>
         </div>
-
-        <div class="news-footer">
-            <a href="{{ news.link }}" target="_blank" class="btn btn-primary">
-                Xem bài gốc →
-            </a>
-        </div>
-    </article>
+    </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const entities = {{ entities_json|safe }};
+    const relations = {{ relations_json|safe }};
+    const attributes = {{ attributes_json|safe }};
+
+    const renderState = {
+        entities: 0,
+        relations: 0,
+        attributes: 0
+    };
+
+    function getSlug(type) {
+        if (!type) return 'default';
+        const normalized = String(type).trim().toLowerCase();
+        const map = {
+            'cá nhân': 'person',
+            'tổ chức': 'org',
+            'địa điểm': 'loc',
+            'tiền tệ': 'money',
+            'ngày tháng': 'date',
+            'thời gian': 'date',
+            'thời lượng': 'date',
+            'nghề nghiệp': 'job',
+            'chức danh': 'job',
+            'sự kiện': 'event',
+            'sản phẩm': 'product',
+            'pháp luật': 'law',
+            'phần trăm': 'percent',
+            'số điện thoại': 'phone',
+            'email': 'email',
+            'url': 'url',
+            'liên kết': 'url',
+            'tuổi': 'age',
+            'tuổi tác': 'age',
+            'nhiệt độ': 'temp',
+            'số lượng': 'quantity',
+            'tỉ số': 'score',
+            'tỷ số': 'score',
+            'cơ sở vật chất': 'facility',
+            'cơ sở hạ tầng': 'facility',
+            'phương tiện': 'vehicle',
+            'giải thưởng': 'award',
+            'bệnh dịch': 'disease',
+            'dịch bệnh': 'disease',
+            'đội thể thao': 'sport',
+            'đội bóng': 'sport',
+            'tác phẩm nghệ thuật': 'art',
+            'tác phẩm': 'art',
+            'ngôn ngữ': 'lang',
+            'quốc tịch': 'nat',
+            'tiền mã hóa': 'crypto',
+            'tiền ảo': 'crypto',
+            'địa chỉ': 'address',
+            'định danh': 'id',
+            'mã định danh': 'id',
+            'mã cổ phiếu': 'ticker',
+            'chỉ số': 'index',
+            'chủ đề': 'topic',
+            'hành động': 'action',
+            'xu hướng': 'trend',
+            'trạng thái': 'state',
+            'nhân vật': 'person',
+            'luật pháp': 'law',
+            'person': 'person',
+            'org': 'org',
+            'loc': 'loc',
+            'money': 'money',
+            'date': 'date',
+            'time': 'date',
+            'duration': 'date',
+            'job': 'job',
+            'event': 'event',
+            'product': 'product',
+            'law': 'law',
+            'percent': 'percent',
+            'phone': 'phone',
+            'email': 'email',
+            'age': 'age',
+            'temperature': 'temp',
+            'quantity': 'quantity',
+            'score': 'score',
+            'facility': 'facility',
+            'vehicle': 'vehicle',
+            'award': 'award',
+            'disease': 'disease',
+            'sport_team': 'sport',
+            'work_of_art': 'art',
+            'language': 'lang',
+            'nationality': 'nat',
+            'crypto': 'crypto',
+            'address': 'address',
+            'identifier': 'id',
+            'stock_ticker': 'ticker',
+            'topic': 'topic',
+            'action': 'action',
+            'trend': 'trend',
+            'state': 'state',
+            'nhã‚n_váº¬t': 'person',
+            'tá»”_chá»¨c': 'org',
+            'ä‘á»Ša_ä‘iá»‚m': 'loc',
+            'chá»¨c_danh': 'job',
+            'sáº¢n_pháº¨m': 'product',
+            'sá»°_kiá»†n': 'event',
+            'luáº¬t_phã p': 'law',
+            'dá»Šch_bá»†nh': 'disease',
+            'tiá»€n_tá»†': 'money',
+            'ngã€y_thã ng': 'date',
+            'thá»œi_gian': 'date'
+        };
+        return map[normalized] || 'default';
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#039;');
+    }
+
+    function normalizeTerm(value) {
+        return String(value ?? '')
+            .normalize('NFC')
+            .toLocaleLowerCase('vi-VN')
+            .replace(/\s+/g, ' ')
+            .trim();
+    }
+
+    function escapeRegExp(value) {
+        return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function addMapItem(map, key, value) {
+        const normalized = normalizeTerm(key);
+        if (!normalized) {
+            return;
+        }
+        if (!map.has(normalized)) {
+            map.set(normalized, []);
+        }
+        map.get(normalized).push(value);
+    }
+
+    function buildInlineMetadata() {
+        const entityByName = new Map();
+        const relationByName = new Map();
+        const attributeByName = new Map();
+
+        (entities || []).forEach(entity => {
+            const key = normalizeTerm(entity.name);
+            if (key && !entityByName.has(key)) {
+                entityByName.set(key, entity);
+            }
+        });
+
+        (relations || []).forEach(rel => {
+            addMapItem(
+                relationByName,
+                rel.subject,
+                `${rel.subject} --${rel.relation}--> ${rel.object}`
+            );
+            addMapItem(
+                relationByName,
+                rel.object,
+                `${rel.subject} --${rel.relation}--> ${rel.object}`
+            );
+        });
+
+        (attributes || []).forEach(attr => {
+            addMapItem(
+                attributeByName,
+                attr.entity,
+                `${attr.attribute_key}: ${attr.attribute_value}`
+            );
+        });
+
+        return { entityByName, relationByName, attributeByName };
+    }
+
+    function summarizeItems(items, maxItems) {
+        const unique = Array.from(new Set(items || []));
+        if (unique.length <= maxItems) {
+            return unique;
+        }
+        return unique.slice(0, maxItems).concat(`... còn ${unique.length - maxItems} mục`);
+    }
+
+    function createInlineEntitySpan(text, entity, relationItems, attributeItems) {
+        const slug = getSlug(entity.type);
+        const span = document.createElement('span');
+        span.className = `inline-entity type-${slug}`;
+        span.tabIndex = 0;
+        span.textContent = text;
+
+        if (relationItems.length > 0) {
+            span.classList.add('has-relation');
+        }
+        if (attributeItems.length > 0) {
+            span.classList.add('has-attribute');
+        }
+
+        const tooltip = [`NER: ${entity.type}`];
+        const relationSummary = summarizeItems(relationItems, 3);
+        const attributeSummary = summarizeItems(attributeItems, 4);
+        if (relationSummary.length > 0) {
+            tooltip.push(`Quan hệ:\n- ${relationSummary.join('\n- ')}`);
+        }
+        if (attributeSummary.length > 0) {
+            tooltip.push(`Thuộc tính:\n- ${attributeSummary.join('\n- ')}`);
+        }
+        span.dataset.tooltip = tooltip.join('\n\n');
+        span.title = span.dataset.tooltip;
+        return span;
+    }
+
+    function renderInlineAnnotations() {
+        const container = document.querySelector('.content-text');
+        if (!container || !entities || entities.length === 0) {
+            return;
+        }
+
+        const sourceText = container.textContent || '';
+        const metadata = buildInlineMetadata();
+        const terms = Array.from(metadata.entityByName.values())
+            .map(entity => entity.name)
+            .filter(name => name && String(name).trim().length >= 2)
+            .sort((a, b) => String(b).length - String(a).length)
+            .slice(0, 180);
+
+        if (terms.length === 0) {
+            return;
+        }
+
+        let matcher;
+        try {
+            matcher = new RegExp(
+                `(^|[^\\p{L}\\p{N}_])(${terms.map(escapeRegExp).join('|')})(?=$|[^\\p{L}\\p{N}_])`,
+                'giu'
+            );
+        } catch (_error) {
+            matcher = new RegExp(
+                `(^|[^\\w])(${terms.map(escapeRegExp).join('|')})(?=$|[^\\w])`,
+                'gi'
+            );
+        }
+
+        const fragment = document.createDocumentFragment();
+        let lastIndex = 0;
+        let matchCount = 0;
+        const maxMatches = 450;
+
+        for (const match of sourceText.matchAll(matcher)) {
+            if (matchCount >= maxMatches) {
+                break;
+            }
+
+            const prefix = match[1] || '';
+            const matchedText = match[2] || '';
+            const matchStart = match.index + prefix.length;
+            const matchEnd = matchStart + matchedText.length;
+            const entityKey = normalizeTerm(matchedText);
+            const entity = metadata.entityByName.get(entityKey);
+
+            if (!entity) {
+                continue;
+            }
+
+            fragment.append(document.createTextNode(sourceText.slice(lastIndex, matchStart)));
+            fragment.append(
+                createInlineEntitySpan(
+                    sourceText.slice(matchStart, matchEnd),
+                    entity,
+                    metadata.relationByName.get(entityKey) || [],
+                    metadata.attributeByName.get(entityKey) || []
+                )
+            );
+            lastIndex = matchEnd;
+            matchCount += 1;
+        }
+
+        fragment.append(document.createTextNode(sourceText.slice(lastIndex)));
+        container.replaceChildren(fragment);
+    }
+
+    function makeMoreButton(label, remaining, onClick) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'btn more-graph-button';
+        button.textContent = `${label} (${remaining})`;
+        button.dataset.moreButton = 'true';
+        button.addEventListener('click', onClick);
+        return button;
+    }
+
+    function renderChunk(containerId, items, stateKey, batchSize, emptyText, itemRenderer, moreLabel) {
+        const container = document.getElementById(containerId);
+        if (!items || items.length === 0) {
+            container.innerHTML = `<div class="empty-state">${emptyText}</div>`;
+            return;
+        }
+
+        const previousButton = container.querySelector('[data-more-button="true"]');
+        if (previousButton) {
+            previousButton.remove();
+        }
+
+        const start = renderState[stateKey];
+        const nextItems = items.slice(start, start + batchSize);
+        const fragment = document.createDocumentFragment();
+
+        nextItems.forEach(item => {
+            const wrapper = document.createElement('div');
+            wrapper.innerHTML = itemRenderer(item).trim();
+            fragment.appendChild(wrapper.firstElementChild);
+        });
+
+        container.appendChild(fragment);
+        renderState[stateKey] += nextItems.length;
+
+        const remaining = items.length - renderState[stateKey];
+        if (remaining > 0) {
+            container.appendChild(makeMoreButton(moreLabel, remaining, () => {
+                renderChunk(containerId, items, stateKey, batchSize, emptyText, itemRenderer, moreLabel);
+            }));
+        }
+    }
+
+    function renderEntities() {
+        renderChunk(
+            'entities-list',
+            entities,
+            'entities',
+            80,
+            'Chưa có thực thể đã lưu cho bài báo này.',
+            entity => {
+                const slug = getSlug(entity.type);
+                return `
+                    <span class="entity-chip type-${slug}">
+                        ${escapeHtml(entity.name)}
+                        <span class="entity-label">${escapeHtml(entity.type)}</span>
+                    </span>
+                `;
+            },
+            'Xem thêm thực thể'
+        );
+    }
+
+    function renderRelations() {
+        renderChunk(
+            'relations-list',
+            relations,
+            'relations',
+            30,
+            'Chưa có mối quan hệ đã lưu cho bài báo này.',
+            rel => {
+                const sSlug = getSlug(rel.subject_type);
+                const oSlug = getSlug(rel.object_type);
+                return `
+                    <div class="relation-triple">
+                        <span class="relation-node type-${sSlug}">${escapeHtml(rel.subject)}</span>
+                        <span class="relation-edge">${escapeHtml(rel.relation)}</span>
+                        <span class="relation-node type-${oSlug}">${escapeHtml(rel.object)}</span>
+                    </div>
+                `;
+            },
+            'Xem thêm quan hệ'
+        );
+    }
+
+    function renderAttributes() {
+        renderChunk(
+            'attributes-list',
+            attributes,
+            'attributes',
+            30,
+            'Chưa có thuộc tính đã lưu cho bài báo này.',
+            attr => {
+                const eSlug = getSlug(attr.entity_type);
+                return `
+                    <div class="relation-triple" style="border-left-color: var(--accent);">
+                        <span class="relation-node type-${eSlug}">${escapeHtml(attr.entity)}</span>
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">có thuộc tính</span>
+                        <span class="relation-node type-default">${escapeHtml(attr.attribute_key)}: ${escapeHtml(attr.attribute_value)}</span>
+                    </div>
+                `;
+            },
+            'Xem thêm thuộc tính'
+        );
+    }
+
+    function initReadOnlyArticleGraph() {
+        renderEntities();
+        renderRelations();
+        renderAttributes();
+        window.requestAnimationFrame(renderInlineAnnotations);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initReadOnlyArticleGraph);
+    } else {
+        initReadOnlyArticleGraph();
+    }
+</script>
 {% endblock %}

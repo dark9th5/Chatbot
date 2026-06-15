@@ -87,6 +87,9 @@ import com.chatbot.newsviet.ui.theme.UserBubbleStart
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+/**
+ * Hiển thị màn hình chat chính của ứng dụng.
+ */
 fun ChatScreen(viewModel: ChatViewModel) {
     val uiState by viewModel.uiState.collectAsState()
     var inputText by remember { mutableStateOf("") }
@@ -167,6 +170,9 @@ fun ChatScreen(viewModel: ChatViewModel) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+/**
+ * Hiển thị thanh tiêu đề và lựa chọn nguồn dữ liệu.
+ */
 fun ChatTopBar(
     onResetChat: () -> Unit,
     resetEnabled: Boolean
@@ -224,6 +230,9 @@ fun ChatTopBar(
 }
 
 @Composable
+/**
+ * Hiển thị một bong bóng tin nhắn của người dùng hoặc chatbot.
+ */
 fun MessageBubble(message: Message) {
     val isUser = message.isUser
 
@@ -277,6 +286,9 @@ fun MessageBubble(message: Message) {
 }
 
 @Composable
+/**
+ * Hiển thị ô nhập câu hỏi và nút gửi tin nhắn.
+ */
 fun ChatInputBar(
     inputText: String,
     isLoading: Boolean,
@@ -366,6 +378,9 @@ fun ChatInputBar(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+/**
+ * Hiển thị trạng thái chào mừng khi chưa có tin nhắn.
+ */
 fun WelcomeScreen(
     modifier: Modifier = Modifier,
     onSuggestionClick: (String) -> Unit
@@ -419,6 +434,9 @@ fun WelcomeScreen(
 }
 
 @Composable
+/**
+ * Hiển thị hiệu ứng đang trả lời của chatbot.
+ */
 fun TypingIndicator() {
     val infiniteTransition = rememberInfiniteTransition(label = "typing")
 

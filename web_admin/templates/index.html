@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - News Chatbot Admin{% endblock %}
+{% block title %}Tổng quan - Quản trị Chatbot Tin tức{% endblock %}
 
 {% block content %}
 <div class="dashboard">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2 class="page-title" style="margin-bottom: 0;">📊 Dashboard</h2>
+        <h2 class="page-title" style="margin-bottom: 0;">📊 Tổng quan hệ thống</h2>
         <button id="btnRefreshNews" class="btn btn-primary" onclick="refreshNews()"
             style="display: flex; align-items: center; gap: 0.5rem;">
             🔄 Cập nhật tin tức
@@ -88,12 +88,13 @@
 
 {% block extra_js %}
 <script>
+// Hàm gọi API cập nhật tin RSS và phản hồi trạng thái lên dashboard.
 async function refreshNews() {
     const btn = document.getElementById('btnRefreshNews');
     const statusDiv = document.getElementById('refreshStatus');
     const contentDiv = document.getElementById('refreshContent');
 
-    // Disable button + show loading
+    // Tạm khóa nút và hiển thị tiến trình để tránh bấm trùng.
     btn.disabled = true;
     btn.innerHTML = '⏳ Đang cập nhật...';
     statusDiv.style.display = 'block';
@@ -105,8 +106,13 @@ async function refreshNews() {
 
         if (data.success) {
             contentDiv.innerHTML = `<div style="color: var(--success); font-weight: 600;">✅ ${data.message}</div>`;
-            // Reload trang sau 2 giây để cập nhật stats
-            setTimeout(() => location.reload(), 2000);
+            // Cập nhật DOM ngay lập tức thay vì reload
+            fetchAndUpdateDashboard();
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+                btn.disabled = false;
+                btn.innerHTML = '🔄 Cập nhật tin tức';
+            }, 3000);
         } else {
             contentDiv.innerHTML = `<div style="color: var(--danger);">❌ Lỗi: ${data.error}</div>`;
             btn.disabled = false;
@@ -118,5 +124,32 @@ async function refreshNews() {
         btn.innerHTML = '🔄 Cập nhật tin tức';
     }
 }
+
+// Hàm tự lấy lại dashboard mới nhất để người dùng không cần bấm F5.
+async function fetchAndUpdateDashboard() {
+    try {
+        const response = await fetch('/');
+        if (response.ok) {
+            const htmlText = await response.text();
+            const parser = new DOMParser();
+            const doc = parser.parseFromString(htmlText, 'text/html');
+            const newDashboard = doc.querySelector('.dashboard').innerHTML;
+
+            // Chỉ đắp DOM đè nếu không trong trạng thái đang chạy manual refresh
+            const btn = document.getElementById('btnRefreshNews');
+            if (btn && btn.disabled === false) {
+                document.querySelector('.dashboard').innerHTML = newDashboard;
+            } else if (btn && btn.disabled === true) {
+                // Đang update bằng tay thì cứ ép buộc đè DOM và reset nút
+                document.querySelector('.dashboard').innerHTML = newDashboard;
+            }
+        }
+    } catch (e) {
+        console.error("Lỗi tự động cập nhật Dashboard", e);
+    }
+}
+
+// Chạy ngầm ngầm 15 giây một lần
+setInterval(fetchAndUpdateDashboard, 15000);
 </script>
 {% endblock %}

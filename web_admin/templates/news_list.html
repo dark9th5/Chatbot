@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Danh sách tin tức - News Chatbot Admin{% endblock %}
+{% block title %}Danh sách tin tức - Quản trị Chatbot Tin tức{% endblock %}
 
 {% block content %}
 <div class="news-list-page">
@@ -8,17 +8,28 @@
 
     <!-- Search Box -->
     <div class="search-box">
-        <form action="/news" method="get" class="search-form">
-            <input type="text" name="q" placeholder="Tìm kiếm tin tức..." value="{{ query or '' }}"
-                class="search-input">
-            <button type="submit" class="btn btn-primary">🔍 Tìm kiếm</button>
+        <form action="/news" method="get" class="search-form" style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <div style="display: flex; gap: 0.5rem; width: 100%;">
+                {% if category %}
+                <input type="hidden" name="category" value="{{ category }}">
+                {% endif %}
+                <input type="text" name="q" placeholder="Tìm kiếm tin tức..." value="{{ query or '' }}"
+                    class="search-input" style="flex: 1;">
+                <button type="submit" class="btn btn-primary">🔍 Tìm kiếm</button>
+            </div>
+            <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                <label style="display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.88rem; cursor: pointer; color: var(--text);">
+                    <input type="checkbox" name="has_relations" value="true" {% if has_relations %}checked{% endif %} onchange="this.form.submit()">
+                    <span>Chỉ hiển thị bài viết có mối quan hệ (Knowledge Graph)</span>
+                </label>
+                {% if category %}
+                <span style="font-size: 0.88rem; color: var(--text-secondary);">
+                    Danh mục: <strong>{{ category }}</strong> 
+                    <a href="/news{% if query %}?q={{ query }}{% endif %}{% if has_relations %}{% if query %}&{% else %}?{% endif %}has_relations=true{% endif %}" style="margin-left: 0.25rem; color: var(--danger); text-decoration: none;">✖ Bỏ lọc danh mục</a>
+                </span>
+                {% endif %}
+            </div>
         </form>
-        {% if category %}
-        <p style="margin-top: 0.5rem; color: var(--text-secondary);">
-            Lọc theo: <strong>{{ category }}</strong> 
-            <a href="/news" style="margin-left: 0.5rem; color: var(--danger);">✖ Bỏ lọc</a>
-        </p>
-        {% endif %}
     </div>
 
     <!-- Results Info -->
@@ -48,9 +59,23 @@
                 <tr>
                     <td>{{ item.id }}</td>
                     <td class="news-title-cell">
-                        <a href="/news/{{ item.id }}" class="news-link">
-                            {{ item.title }}
-                        </a>
+                        <div style="display: flex; flex-direction: column; gap: 0.25rem;">
+                            <a href="/news/{{ item.id }}" class="news-link" style="font-weight: 600;">
+                                {{ item.title }}
+                            </a>
+                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.15rem;">
+                                {% if item.entity_count > 0 %}
+                                <span class="badge" style="background-color: #ede9fe; color: #5b21b6; font-size: 0.72rem; padding: 0.1rem 0.35rem; font-weight: 700;">
+                                    🧬 {{ item.entity_count }} thực thể
+                                </span>
+                                {% endif %}
+                                {% if item.relation_count > 0 %}
+                                <span class="badge" style="background-color: #dbeafe; color: #1e40af; font-size: 0.72rem; padding: 0.1rem 0.35rem; font-weight: 700;">
+                                    🔗 {{ item.relation_count }} quan hệ
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
                     </td>
                     <td>
                         <a href="/news?category={{ item.category }}" class="badge" 
@@ -75,13 +100,13 @@
     {% if total_pages > 1 %}
     <div class="pagination">
         {% if page > 1 %}
-        <a href="/news?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if category %}&category={{ category }}{% endif %}" class="btn btn-sm">← Trước</a>
+        <a href="/news?page={{ page - 1 }}{% if query %}&q={{ query }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if has_relations %}&has_relations=true{% endif %}" class="btn btn-sm">← Trước</a>
         {% endif %}
 
         <span class="page-info">Trang {{ page }} / {{ total_pages }}</span>
 
         {% if page < total_pages %}
-        <a href="/news?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if category %}&category={{ category }}{% endif %}"
+        <a href="/news?page={{ page + 1 }}{% if query %}&q={{ query }}{% endif %}{% if category %}&category={{ category }}{% endif %}{% if has_relations %}&has_relations=true{% endif %}"
             class="btn btn-sm">Sau →</a>
         {% endif %}
     </div>
@@ -89,6 +114,7 @@
 </div>
 
 <script>
+// Hàm xóa một bài báo từ danh sách và tải lại trang khi xóa thành công.
 async function deleteNews(newsId) {
     if (!confirm('Bạn có chắc chắn muốn xóa bài viết này và tất cả dữ liệu vector liên quan?')) {
         return;

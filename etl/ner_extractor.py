@@ -4,7 +4,7 @@ import json
 import re
 import unicodedata
 from pathlib import Path
-from typing import Dict, Iterable, List, Set
+from typing import Dict, Iterable, List, Set, Tuple
 
 
 VI_UPPER = "A-ZÀÁẢÃẠĂẰẮẲẴẶÂẦẤẨẪẬĐEÈÉẺẼẸÊỀẾỂỄỆIÌÍỈĨỊOÒÓỎÕỌÔỒỐỔỖỘƠỜỚỞỠỢUÙÚỦŨỤƯỪỨỬỮỰYỲÝỶỸỴ"
@@ -79,6 +79,49 @@ class NERExtractor:
         "TREND",
         "STATE",
     ]
+
+    VI_TYPE_MAP = {
+        "PERSON": "Cá nhân",
+        "ORG": "Tổ chức",
+        "LOC": "Địa điểm",
+        "MONEY": "Tiền tệ",
+        "DATE": "Ngày tháng",
+        "TIME": "Thời gian",
+        "JOB": "Nghề nghiệp",
+        "EVENT": "Sự kiện",
+        "PRODUCT": "Sản phẩm",
+        "LAW": "Pháp luật",
+        "PERCENT": "Phần trăm",
+        "PHONE": "Số điện thoại",
+        "EMAIL": "Email",
+        "URL": "URL",
+        "AGE": "Tuổi",
+        "TEMPERATURE": "Nhiệt độ",
+        "QUANTITY": "Số lượng",
+        "SCORE": "Tỉ số",
+        "FACILITY": "Cơ sở vật chất",
+        "VEHICLE": "Phương tiện",
+        "AWARD": "Giải thưởng",
+        "DISEASE": "Bệnh dịch",
+        "SPORT_TEAM": "Đội thể thao",
+        "WORK_OF_ART": "Tác phẩm nghệ thuật",
+        "LANGUAGE": "Ngôn ngữ",
+        "NATIONALITY": "Quốc tịch",
+        "CRYPTO": "Tiền mã hóa",
+        "ADDRESS": "Địa chỉ",
+        "IDENTIFIER": "Định danh",
+        "STOCK_TICKER": "Mã cổ phiếu",
+        "INDEX": "Chỉ số",
+        "ORDINAL": "Số thứ tự",
+        "CARDINAL": "Số lượng số",
+        "DURATION": "Thời lượng",
+        "HASHTAG": "Hashtag",
+        "USERNAME": "Tên người dùng",
+        "TOPIC": "Chủ đề",
+        "ACTION": "Hành động",
+        "TREND": "Xu hướng",
+        "STATE": "Trạng thái",
+    }
 
     PRIMARY_ANCHOR_TYPES = {
         "PERSON",
@@ -362,21 +405,33 @@ class NERExtractor:
             "Nguyễn|Trần|Lê|Phạm|Hoàng|Huỳnh|Phan|Vũ|Võ|Đặng|Bùi|Đỗ|Hồ|Ngô|"
             "Dương|Lý|Trịnh|Đinh|Đoàn|Lâm|Mai|Đào|Cao|Phùng|Tiêu|Thạch|Tô|"
             "Tạ|Chu|Chung|Khúc|Kiều|Kim|La|Lã|Lại|Lưu|Mạc|Mạch|Nghiêm|Ngụy|"
-            "Phó|Quách|Tôn|Trang|Triệu|Vương|Hà|Tăng|Tống|Hứa|Âu|Âu Dương"
+            "Phó|Quách|Tôn|Trang|Triệu|Vương|Hà|Tăng|Tống|Hứa|Âu|Âu Dương|"
+            "Trương|Lương|Thái|Châu|Vi|Nông|Thân|Bế|Cấn|Khổng|Cù|Đồng|Giang|"
+            "Tưởng|Trâu|Tôn Thất|Doãn|Thiều|Diệp|Từ|Sử|Lư|Uông|Điền|Đổng|"
+            "Tào|Khương|Lăng|Bành|Bạch|Văn|Cầm|Chế|Đái|Đàm|Đào|Đậu|Khâu|Khuất|"
+            "Lại|Lều|Lư|Mẫn|Nhan|Ninh|Ông|Phí|Phó|Quản|Sầm|Tôn|Trình|Ung|Viên"
         )
+        name_token = rf"(?:[{VI_UPPER}][{VI_LOWER}]+|[A-ZĐ]{{1,3}})"
         self.person_pattern = re.compile(
-            rf"\b(?:{vietnamese_surnames})\s+[{VI_UPPER}][{VI_LOWER}]+"
-            rf"(?:\s+[{VI_UPPER}][{VI_LOWER}]+){{1,3}}\b"
+            rf"\b(?:{vietnamese_surnames})[ \t]+{name_token}"
+            rf"(?:[ \t]+{name_token}){{0,3}}\b"
         )
         self.titled_person_pattern = re.compile(
-            rf"\b(?:ông|bà|anh|chị|đồng chí|giáo sư|tiến sĩ|bác sĩ|luật sư)\s+"
-            rf"([{VI_UPPER}][{VI_LOWER}]+(?:\s+[{VI_UPPER}][{VI_LOWER}]+){{1,3}})\b"
+            rf"\b(?i:(?:ông|bà|anh|chị|đồng chí|giáo sư|tiến sĩ|bác sĩ|luật sư|"
+            rf"chủ tịch|thủ tướng|tổng thống|bộ trưởng|đại sứ|hlv|huấn luyện viên))\s+"
+            rf"({name_token}(?:[ \t]+{name_token}){{1,4}})\b"
         )
-        # Generic titlecase person pattern: 2-3 consecutive titlecase tokens
-        # Require only spaces/tabs between tokens (avoid matching across newlines)
-        # e.g. matches "Nguyễn Chí Lực" but not "Nguyễn Chí Lực\nChức danh"
+        # Fallback for foreign/non-Vietnamese names. It is deliberately filtered
+        # later because raw titlecase matching is the noisiest source of NER errors.
         self.generic_person_pattern = re.compile(
-            rf"\b([{VI_UPPER}][{VI_LOWER}]+(?:[ \t]+[{VI_UPPER}][{VI_LOWER}]+){{1,2}})\b"
+            rf"\b({name_token}(?:[ \t]+{name_token}){{1,3}})\b"
+        )
+        self.job_title_pattern = re.compile(
+            r"\b(?:tổng bí thư|chủ tịch nước|chủ tịch quốc hội|tổng thống|thủ tướng|"
+            r"phó thủ tướng|bộ trưởng|thứ trưởng|đại sứ|tổng giám đốc|giám đốc|"
+            r"phó giám đốc|chủ tịch|phó chủ tịch|đại tướng|thượng tướng|trung tướng|"
+            r"thiếu tướng|đội trưởng|đội phó|huấn luyện viên|hlv|ceo|cfo|cto)\b",
+            re.IGNORECASE,
         )
         self.dynamic_loc_pattern = re.compile(
             rf"\b(?:tỉnh|thành phố|tp|quận|huyện|thị xã|xã|phường|đảo|vịnh|"
@@ -509,18 +564,51 @@ class NERExtractor:
         }
         # Tokens that should not be considered as person name parts
         self._person_noise_tokens = {
+            "ông",
+            "bà",
+            "anh",
+            "chị",
+            "đồng",
+            "người",
             "các",
             "từ",
             "tại",
             "chức",
+            "chủ",
+            "tịch",
+            "thủ",
+            "tướng",
+            "tổng",
+            "thống",
             "trường",
             "đại",
             "thành",
+            "phố",
+            "tp",
+            "tỉnh",
+            "quận",
+            "huyện",
+            "phường",
+            "xã",
             "bộ",
             "sở",
             "công",
             "ty",
+            "cổ",
+            "phần",
             "tập",
+            "đoàn",
+            "ngân",
+            "hàng",
+            "bệnh",
+            "viện",
+            "đội",
+            "tuyển",
+            "sản",
+            "phẩm",
+            "giải",
+            "cup",
+            "league",
             "liên",
             "quốc",
         }
@@ -542,6 +630,24 @@ class NERExtractor:
             "serie a",
             "champions league",
         )
+        self._person_full_blocklist = {
+            "ai cập",
+            "aff cup",
+            "cần thơ",
+            "đà nẵng",
+            "hà nội",
+            "hải phòng",
+            "hồ chí minh",
+            "thái lan",
+            "tp hồ chí minh",
+            "việt nam",
+        }
+        self._non_person_context_prefix_pattern = re.compile(
+            r"(?:tp|thành phố|tỉnh|quận|huyện|thị xã|xã|phường|đảo|vịnh|"
+            r"sông|núi|hồ|trường|đại học|học viện|bệnh viện|công ty|"
+            r"tập đoàn|ngân hàng|đội tuyển)\s+$",
+            re.IGNORECASE,
+        )
         self._time_like_duration_pattern = re.compile(
             r"^\d{1,2}\s*giờ(?:\s*\d{1,2}\s*phút)?$",
             re.IGNORECASE,
@@ -554,6 +660,177 @@ class NERExtractor:
     def _remove_normalized_term(self, bucket: Set[str], normalized: str) -> None:
         to_remove = {item for item in bucket if _normalize_for_match(item) == normalized}
         bucket.difference_update(to_remove)
+
+    def _is_known_non_person_name(self, normalized: str) -> bool:
+        if normalized in self._person_full_blocklist:
+            return True
+        non_person_types = {
+            "ORG",
+            "LOC",
+            "FACILITY",
+            "EVENT",
+            "PRODUCT",
+            "LAW",
+            "SPORT_TEAM",
+            "WORK_OF_ART",
+            "LANGUAGE",
+            "NATIONALITY",
+            "CRYPTO",
+            "INDEX",
+            "AWARD",
+            "DISEASE",
+        }
+        return any(
+            normalized in self.lexicons.get(entity_type, set())
+            or normalized in self.titlecase_lexicons.get(entity_type, set())
+            for entity_type in non_person_types
+        )
+
+    def _is_valid_person_candidate(
+        self,
+        candidate: str,
+        text: str = "",
+        start: int | None = None,
+    ) -> bool:
+        normalized = _normalize_for_match(candidate)
+        if not normalized:
+            return False
+
+        parts = normalized.split()
+        if not 2 <= len(parts) <= 5:
+            return False
+        if normalized in self._person_full_blocklist:
+            return False
+        if any(normalized.startswith(prefix) for prefix in self._person_blocklist_prefixes):
+            return False
+        if set(parts) & self._person_noise_tokens:
+            return False
+        if any(part.isdigit() for part in parts):
+            return False
+
+        raw_parts = re.findall(r"\w+", candidate, flags=re.UNICODE)
+        for idx, part in enumerate(parts):
+            raw = raw_parts[idx] if idx < len(raw_parts) else part
+            if len(part) == 1 and not (idx > 0 and raw.isupper()):
+                return False
+
+        if self._is_known_non_person_name(normalized):
+            return False
+
+        if text and start is not None:
+            before = text[max(0, start - 40) : start]
+            if self._non_person_context_prefix_pattern.search(before):
+                return False
+
+        return True
+
+    @staticmethod
+    def _spans_overlap(left: Tuple[int, int], right: Tuple[int, int]) -> bool:
+        return left[0] < right[1] and right[0] < left[1]
+
+    def _sentence_bounds(self, text: str, start: int, end: int) -> Tuple[int, int]:
+        left_candidates = [text.rfind(mark, 0, start) for mark in ".!?\n"]
+        right_candidates = [idx for mark in ".!?\n" if (idx := text.find(mark, end)) != -1]
+        left = max(left_candidates) + 1
+        right = min(right_candidates) if right_candidates else len(text)
+        return left, right
+
+    def _same_sentence(self, text: str, left: Dict[str, object], right: Dict[str, object]) -> bool:
+        start = min(int(left["start"]), int(right["start"]))
+        end = max(int(left["end"]), int(right["end"]))
+        sentence_start, sentence_end = self._sentence_bounds(text, start, end)
+        return sentence_start <= start and end <= sentence_end
+
+    def _entity_type_priority(self, entity_type: str) -> int:
+        priorities = {
+            "PERSON": 100,
+            "ORG": 95,
+            "SPORT_TEAM": 94,
+            "FACILITY": 93,
+            "LOC": 90,
+            "EVENT": 86,
+            "PRODUCT": 84,
+            "LAW": 82,
+            "AWARD": 80,
+            "WORK_OF_ART": 78,
+            "VEHICLE": 76,
+            "DISEASE": 74,
+            "CRYPTO": 72,
+            "STOCK_TICKER": 70,
+            "INDEX": 68,
+            "NATIONALITY": 66,
+            "TOPIC": 30,
+            "JOB": 20,
+        }
+        return priorities.get(entity_type, 10)
+
+    def _iter_entity_mentions(
+        self,
+        text: str,
+        entities_dict: Dict[str, List[str]],
+        allowed_types: Set[str] | None = None,
+    ) -> List[Dict[str, object]]:
+        candidates: List[Dict[str, object]] = []
+        for entity_type, values in entities_dict.items():
+            if allowed_types is not None and entity_type not in allowed_types:
+                continue
+            for value in values:
+                normalized_value = _normalize_for_match(value)
+                if not normalized_value:
+                    continue
+                pattern = re.compile(
+                    rf"(?<!\w){re.escape(value)}(?!\w)",
+                    re.IGNORECASE | re.UNICODE,
+                )
+                for match in pattern.finditer(text):
+                    candidates.append(
+                        {
+                            "type": entity_type,
+                            "value": value,
+                            "surface": match.group(0),
+                            "start": match.start(),
+                            "end": match.end(),
+                            "length": match.end() - match.start(),
+                            "priority": self._entity_type_priority(entity_type),
+                        }
+                    )
+
+        candidates.sort(
+            key=lambda item: (
+                int(item["start"]),
+                -int(item["length"]),
+                -int(item["priority"]),
+            )
+        )
+
+        selected: List[Dict[str, object]] = []
+        for candidate in candidates:
+            candidate_span = (int(candidate["start"]), int(candidate["end"]))
+            conflicts = [
+                item
+                for item in selected
+                if self._spans_overlap(candidate_span, (int(item["start"]), int(item["end"])))
+            ]
+            if not conflicts:
+                selected.append(candidate)
+                continue
+
+            best_conflict = max(
+                conflicts,
+                key=lambda item: (int(item["length"]), int(item["priority"])),
+            )
+            candidate_score = (int(candidate["length"]), int(candidate["priority"]))
+            conflict_score = (int(best_conflict["length"]), int(best_conflict["priority"]))
+            if candidate_score > conflict_score:
+                selected = [item for item in selected if item not in conflicts]
+                selected.append(candidate)
+
+        selected.sort(key=lambda item: (int(item["start"]), int(item["end"])))
+        return selected
+
+    @staticmethod
+    def _mention_text(mention: Dict[str, object]) -> str:
+        return str(mention.get("surface") or mention.get("value") or "").strip()
 
     def _resolve_entity_conflicts(self, entities: Dict[str, Set[str]]) -> None:
         """Resolve common cross-type collisions before returning final entities."""
@@ -597,15 +874,61 @@ class NERExtractor:
                 value in normalized_by_type.get(entity_type, set())
                 for entity_type in preferred_over_person
             )
+            is_nested_in_stronger_type = any(
+                value != stronger
+                and len(value.split()) >= 2
+                and (
+                    stronger.startswith(f"{value} ")
+                    or stronger.endswith(f" {value}")
+                    or f" {value} " in f" {stronger} "
+                )
+                for entity_type in preferred_over_person
+                for stronger in normalized_by_type.get(entity_type, set())
+            )
             is_non_person_phrase = any(
                 value.startswith(prefix) for prefix in self._person_blocklist_prefixes
             )
-            if has_stronger_type or is_non_person_phrase:
+            if has_stronger_type or is_nested_in_stronger_type or is_non_person_phrase:
                 self._remove_normalized_term(entities["PERSON"], value)
 
             # If the same token appears as TOPIC and looks generic, keep TOPIC only.
             if value in normalized_by_type.get("TOPIC", set()) and len(value.split()) <= 3:
                 self._remove_normalized_term(entities["PERSON"], value)
+
+        # TOPIC is a search signal, not a fallback bucket for jobs/actions/states.
+        for stronger_type in (
+            "JOB",
+            "ACTION",
+            "TREND",
+            "STATE",
+            "ORG",
+            "LOC",
+            "FACILITY",
+            "EVENT",
+            "PRODUCT",
+            "LAW",
+            "SPORT_TEAM",
+            "INDEX",
+            "CRYPTO",
+        ):
+            for value in normalized_by_type.get(stronger_type, set()):
+                self._remove_normalized_term(entities["TOPIC"], value)
+
+        # Drop shorter same-type aliases inside full names for article-level display,
+        # except short acronyms because they are useful search anchors.
+        for entity_type in {"ORG", "FACILITY", "SPORT_TEAM", "EVENT", "PRODUCT", "LOC"}:
+            values = list(entities.get(entity_type, set()))
+            normalized_values = {_normalize_for_match(value): value for value in values}
+            for normalized, original in list(normalized_values.items()):
+                if len(normalized) <= 5 and normalized.replace(" ", "").isalpha():
+                    continue
+                if any(
+                    normalized != other
+                    and len(normalized.split()) >= 2
+                    and f" {normalized} " in f" {other} "
+                    for other in normalized_values
+                ):
+                    entities[entity_type].discard(original)
 
     def _build_seed_lexicons(self) -> Dict[str, Set[str]]:
         return {
@@ -1088,6 +1411,305 @@ class NERExtractor:
             filtered.append(term)
         return filtered
 
+
+    # Relation nodes are real named entities only. JOB/TOPIC/ACTION/TREND/STATE
+    # remain useful signals, but they should not become subject/object nodes.
+    RELATION_ELIGIBLE_TYPES = {
+        "PERSON", "ORG", "LOC", "EVENT", "PRODUCT", "LAW", "FACILITY",
+        "SPORT_TEAM", "DISEASE", "AWARD", "WORK_OF_ART", "VEHICLE",
+        "NATIONALITY", "CRYPTO", "INDEX", "STOCK_TICKER",
+    }
+
+    def extract_relations(
+        self,
+        text: str,
+        entities_dict: dict | None = None,
+    ) -> list:
+        """Extract high-precision relations from explicit same-sentence context."""
+        relations = []
+        entities_dict = entities_dict or self.extract_entities(text)
+        mentions = self._iter_entity_mentions(text, entities_dict, self.RELATION_ELIGIBLE_TYPES)
+
+        def add_relation(subject: Dict[str, object], relation: str, obj: Dict[str, object]) -> None:
+            if subject["value"] == obj["value"] and subject["type"] == obj["type"]:
+                return
+            item = {
+                "subject": self._mention_text(subject),
+                "subject_type": str(subject["type"]),
+                "relation": relation,
+                "object": self._mention_text(obj),
+                "object_type": str(obj["type"]),
+            }
+            key = (
+                _normalize_for_match(item["subject"]),
+                item["subject_type"],
+                item["relation"],
+                _normalize_for_match(item["object"]),
+                item["object_type"],
+            )
+            if key not in seen:
+                seen.add(key)
+                relations.append(item)
+
+        def between_text(left: Dict[str, object], right: Dict[str, object]) -> str:
+            return text[int(left["end"]) : int(right["start"])] if int(left["end"]) <= int(right["start"]) else ""
+
+        def context_text(left: Dict[str, object], right: Dict[str, object]) -> str:
+            start = max(0, int(left["start"]) - 24)
+            end = min(len(text), int(right["end"]) + 24)
+            return text[start:end]
+
+        seen = set()
+        moving_types = {"PERSON", "ORG", "SPORT_TEAM", "LOC"}
+        org_like = {"ORG", "FACILITY", "SPORT_TEAM"}
+        people_or_org = {"PERSON", "ORG", "FACILITY", "SPORT_TEAM"}
+        location_types = {"LOC", "FACILITY"}
+
+        for i, left in enumerate(mentions):
+            for right in mentions[i + 1 : i + 6]:
+                if int(right["start"]) - int(left["end"]) > 180:
+                    break
+                if not self._same_sentence(text, left, right):
+                    continue
+
+                middle = between_text(left, right)
+                ctx = context_text(left, right)
+                left_type = str(left["type"])
+                right_type = str(right["type"])
+
+                if re.search(r"\b(?:thắng|chiến thắng|đánh bại|vượt qua)\b", middle, re.IGNORECASE):
+                    if left_type in moving_types and right_type in moving_types:
+                        add_relation(left, "THẮNG", right)
+                    continue
+                if re.search(r"\b(?:thua|thất bại trước|bị loại bởi)\b", middle, re.IGNORECASE):
+                    if left_type in moving_types and right_type in moving_types:
+                        add_relation(left, "THUA", right)
+                    continue
+                if re.search(r"\b(?:gặp|gặp gỡ|làm việc với|trao đổi với|hội đàm với)\b", middle, re.IGNORECASE):
+                    if left_type != "PERSON" and re.match(r"\s*,", middle):
+                        continue
+                    if left_type in people_or_org and right_type in people_or_org:
+                        add_relation(left, "LÀM_VIỆC_VỚI", right)
+                    continue
+                if re.search(r"\b(?:hợp tác với|liên kết với|liên minh với|ký kết với|ký thỏa thuận với)\b", middle, re.IGNORECASE):
+                    if left_type in people_or_org and right_type in people_or_org:
+                        add_relation(left, "HỢP_TÁC_VỚI", right)
+                    continue
+                if re.search(r"\b(?:đầu tư vào|rót vốn vào|cam kết đầu tư vào)\b", middle, re.IGNORECASE):
+                    if left_type in {"PERSON", "ORG"} and right_type in {"ORG", "PRODUCT", "LOC", "FACILITY"}:
+                        add_relation(left, "ĐẦU_TƯ_VÀO", right)
+                    continue
+                if re.search(r"\b(?:mua lại|thâu tóm)\b", middle, re.IGNORECASE):
+                    if left_type in {"ORG", "PERSON"} and right_type in {"ORG", "PRODUCT"}:
+                        add_relation(left, "MUA_LẠI", right)
+                    continue
+                if re.search(r"\b(?:sáp nhập với|hợp nhất với)\b", middle, re.IGNORECASE):
+                    if left_type == "ORG" and right_type == "ORG":
+                        add_relation(left, "SÁP_NHẬP_VỚI", right)
+                    continue
+                if re.search(r"\b(?:ra mắt|phát hành|giới thiệu|công bố)\b", middle, re.IGNORECASE):
+                    if left_type in {"ORG", "PERSON"} and right_type == "PRODUCT":
+                        add_relation(left, "RA_MẮT_SẢN_PHẨM", right)
+                    continue
+                if re.search(r"\b(?:sản xuất|phát triển|chế tạo)\b", middle, re.IGNORECASE):
+                    if left_type == "ORG" and right_type in {"PRODUCT", "VEHICLE"}:
+                        add_relation(left, "PHÁT_TRIỂN_SẢN_PHẨM", right)
+                    continue
+                if re.search(r"\b(?:trụ sở|đặt trụ sở|có trụ sở|văn phòng)\s+(?:ở|tại)\b", ctx, re.IGNORECASE):
+                    if left_type in org_like and right_type in location_types:
+                        add_relation(left, "CÓ_TRỤ_SỞ_TẠI", right)
+                    continue
+                if re.search(r"\b(?:diễn ra|tổ chức|khai mạc)\s+(?:ở|tại)\b", middle, re.IGNORECASE):
+                    if left_type == "EVENT" and right_type in location_types:
+                        add_relation(left, "DIỄN_RA_TẠI", right)
+                    continue
+                if re.search(r"\b(?:tham gia|dự|tham dự)\b", middle, re.IGNORECASE):
+                    if left_type in {"PERSON", "ORG", "SPORT_TEAM"} and right_type == "EVENT":
+                        add_relation(left, "THAM_GIA", right)
+                    continue
+                if re.search(r"\b(?:nhận|đoạt|giành)\b", middle, re.IGNORECASE):
+                    if left_type in {"PERSON", "ORG", "SPORT_TEAM"} and right_type == "AWARD":
+                        add_relation(left, "NHẬN_GIẢI_THƯỞNG", right)
+                    continue
+                if re.search(r"\b(?:sinh tại|sinh ra tại|quê ở|xuất thân từ)\b", middle, re.IGNORECASE):
+                    if left_type == "PERSON" and right_type == "LOC":
+                        add_relation(left, "SINH_TẠI", right)
+                    continue
+                if self.job_title_pattern.search(middle):
+                    if left_type == "PERSON" and right_type in org_like:
+                        add_relation(left, "GIỮ_CHỨC_VỤ_TẠI", right)
+                    continue
+        return relations
+
+    def extract_attributes(
+        self,
+        text: str,
+        entities_dict: dict | None = None,
+    ) -> list:
+        """Extract typed attributes with strict owner/type constraints."""
+        attributes: List[Dict[str, str]] = []
+        entities_dict = entities_dict or self.extract_entities(text)
+        attribute_owner_types = self.RELATION_ELIGIBLE_TYPES | {"TOPIC"}
+        entity_mentions = self._iter_entity_mentions(text, entities_dict, attribute_owner_types)
+        seen = set()
+
+        attr_allowed_types = {
+            "TUỔI": {"PERSON"},
+            "CHỨC_VỤ": {"PERSON"},
+            "NHÂN_SỰ": {"ORG", "FACILITY"},
+            "HÀNH_ĐỘNG": {"PERSON", "ORG", "SPORT_TEAM"},
+            "XU_HƯỚNG": {"INDEX", "TOPIC", "PRODUCT", "ORG", "CRYPTO"},
+            "GIÁ_TRỊ": {"ORG", "PRODUCT", "INDEX", "TOPIC", "EVENT"},
+            "BIẾN_ĐỘNG": {"ORG", "PRODUCT", "INDEX", "TOPIC", "CRYPTO"},
+            "XẾP_HẠNG": {"PERSON", "ORG", "PRODUCT", "SPORT_TEAM", "LOC"},
+            "QUỐC_TỊCH": {"PERSON", "PRODUCT", "ORG"},
+            "TRẠNG_THÁI": {"PERSON", "ORG", "LOC", "FACILITY", "DISEASE", "PRODUCT", "EVENT"},
+        }
+
+        def add_attribute(entity: Dict[str, object], key: str, value: str) -> None:
+            value = re.sub(r"\s+", " ", value.strip())
+            if not value:
+                return
+            item = {
+                "entity": self._mention_text(entity),
+                "entity_type": str(entity["type"]),
+                "attribute_key": key,
+                "attribute_value": value.upper(),
+            }
+            dedupe_key = (
+                _normalize_for_match(item["entity"]),
+                item["entity_type"],
+                item["attribute_key"],
+                _normalize_for_match(item["attribute_value"]),
+            )
+            if dedupe_key not in seen:
+                seen.add(dedupe_key)
+                attributes.append(item)
+
+        def best_owner(
+            start: int,
+            end: int,
+            allowed_types: Set[str],
+            max_distance: int = 80,
+        ) -> Dict[str, object] | None:
+            best = None
+            best_score: Tuple[int, int, int] | None = None
+            signal_mid = (start + end) // 2
+            probe = {"start": start, "end": end}
+            for mention in entity_mentions:
+                if mention["type"] not in allowed_types:
+                    continue
+                if not self._same_sentence(text, mention, probe):
+                    continue
+                if int(mention["end"]) <= start:
+                    distance = start - int(mention["end"])
+                elif int(mention["start"]) >= end:
+                    distance = int(mention["start"]) - end
+                else:
+                    distance = 0
+                if distance > max_distance:
+                    continue
+                mention_mid = (int(mention["start"]) + int(mention["end"])) // 2
+                score = (distance, abs(mention_mid - signal_mid), -int(mention["priority"]))
+                if best_score is None or score < best_score:
+                    best_score = score
+                    best = mention
+            return best
+
+        for person in [item for item in entity_mentions if item["type"] == "PERSON"]:
+            sentence_start, sentence_end = self._sentence_bounds(
+                text,
+                int(person["start"]),
+                int(person["end"]),
+            )
+            before = text[sentence_start : int(person["start"])]
+            after = text[int(person["end"]) : sentence_end]
+
+            before_tail = before[-80:]
+            immediate_before_jobs = [
+                match
+                for match in self.job_title_pattern.finditer(before_tail)
+                if re.fullmatch(r"[\s,;:()\"'“”]*", before_tail[match.end() :])
+            ]
+            if immediate_before_jobs:
+                add_attribute(person, "CHỨC_VỤ", immediate_before_jobs[-1].group(0))
+
+            after_job = re.match(r"\s*,?\s*(?:là\s+)?(?P<job>[^,.;]{0,20}?" + self.job_title_pattern.pattern + r"[^,.;]{0,30})", after, re.IGNORECASE)
+            if after_job:
+                job_match = self.job_title_pattern.search(after_job.group("job"))
+                if job_match:
+                    add_attribute(person, "CHỨC_VỤ", job_match.group(0))
+
+            age_match = re.match(r"\s*,?\s*(?P<age>\d{1,3}\s*(?:tuổi|năm tuổi))\b", after, re.IGNORECASE)
+            if age_match:
+                add_attribute(person, "TUỔI", age_match.group("age"))
+
+            nationality_match = re.search(
+                r"\b(?:quốc tịch|người|đến từ|xuất thân từ)\s+"
+                rf"(?P<nation>[{VI_UPPER}][\wÀ-ỹ\s]{{1,32}})",
+                after[:80],
+                re.IGNORECASE,
+            )
+            if nationality_match:
+                add_attribute(person, "QUỐC_TỊCH", nationality_match.group("nation"))
+
+        personnel_pattern = re.compile(
+            r"\b\d+(?:[,.]\d+)?\s*(?:nhân viên|lao động|người lao động|cán bộ|công nhân)\b",
+            re.IGNORECASE,
+        )
+        for match in personnel_pattern.finditer(text):
+            owner = best_owner(match.start(), match.end(), attr_allowed_types["NHÂN_SỰ"], 100)
+            if owner:
+                add_attribute(owner, "NHÂN_SỰ", match.group(0))
+
+        ranking_pattern = re.compile(
+            r"\b(?:xếp hạng|đứng thứ|hạng|top)\s*(?:\d+|nhất|nhì|ba|tư|năm)\b",
+            re.IGNORECASE,
+        )
+        for match in ranking_pattern.finditer(text):
+            owner = best_owner(match.start(), match.end(), attr_allowed_types["XẾP_HẠNG"], 90)
+            if owner:
+                add_attribute(owner, "XẾP_HẠNG", match.group(0))
+
+        for value in entities_dict.get("MONEY", []):
+            for match in re.finditer(re.escape(value), text, re.IGNORECASE):
+                sentence_start, sentence_end = self._sentence_bounds(text, match.start(), match.end())
+                sentence = text[sentence_start:sentence_end]
+                if not re.search(r"\b(?:giá|doanh thu|lợi nhuận|vốn|đầu tư|thiệt hại|mức|trị giá)\b", sentence, re.IGNORECASE):
+                    continue
+                owner = best_owner(match.start(), match.end(), attr_allowed_types["GIÁ_TRỊ"], 100)
+                if owner:
+                    add_attribute(owner, "GIÁ_TRỊ", match.group(0))
+
+        for value in entities_dict.get("PERCENT", []):
+            for match in re.finditer(re.escape(value), text, re.IGNORECASE):
+                sentence_start, sentence_end = self._sentence_bounds(text, match.start(), match.end())
+                sentence = text[sentence_start:sentence_end]
+                if not re.search(r"\b(?:tăng|giảm|sụt|tăng trưởng|biến động|lãi suất|lạm phát)\b", sentence, re.IGNORECASE):
+                    continue
+                owner = best_owner(match.start(), match.end(), attr_allowed_types["BIẾN_ĐỘNG"], 100)
+                if owner:
+                    add_attribute(owner, "BIẾN_ĐỘNG", match.group(0))
+
+        signal_map = {
+            "ACTION": ("HÀNH_ĐỘNG", 70),
+            "TREND": ("XU_HƯỚNG", 80),
+            "STATE": ("TRẠNG_THÁI", 80),
+        }
+        for signal_type, (attribute_key, max_distance) in signal_map.items():
+            for value in entities_dict.get(signal_type, []):
+                for match in re.finditer(re.escape(value), text, re.IGNORECASE):
+                    owner = best_owner(
+                        match.start(),
+                        match.end(),
+                        attr_allowed_types[attribute_key],
+                        max_distance,
+                    )
+                    if owner:
+                        add_attribute(owner, attribute_key, match.group(0))
+
+        return attributes
+
     def analyze_query(self, text: str) -> Dict[str, object]:
         """
         Phân tích câu hỏi thành các lớp tín hiệu phục vụ tìm kiếm.
@@ -1227,28 +1849,20 @@ class NERExtractor:
             )
         )
 
-        # 1) Strong VN-surname pattern
-        entities["PERSON"].update(self.person_pattern.findall(text))
-        # 2) Titled person (ông/bà/tiến sĩ ...)
-        titled = self.titled_person_pattern.findall(text)
-        # titled_person_pattern may capture group; normalize consistently
-        if titled:
-            # If pattern returns tuples (group), flatten
-            for item in titled:
-                if isinstance(item, tuple):
-                    entities["PERSON"].add(item[0])
-                else:
-                    entities["PERSON"].add(item)
-        # 3) Generic titlecase matches as fallback, but filter noise and newline-joined tokens
-        for match in self.generic_person_pattern.findall(text):
-            norm = _normalize_for_match(match)
-            # skip if contains any noise token or is too short
-            parts = {p.strip().casefold() for p in norm.split()}
-            if parts & self._person_noise_tokens:
-                continue
-            if any(len(p) <= 1 for p in parts):
-                continue
-            entities["PERSON"].add(match)
+        for match in self.person_pattern.finditer(text):
+            candidate = match.group(0)
+            if self._is_valid_person_candidate(candidate, text, match.start()):
+                entities["PERSON"].add(candidate)
+
+        for match in self.titled_person_pattern.finditer(text):
+            candidate = match.group(1)
+            if self._is_valid_person_candidate(candidate, text, match.start(1)):
+                entities["PERSON"].add(candidate)
+
+        for match in self.generic_person_pattern.finditer(text):
+            candidate = match.group(1)
+            if self._is_valid_person_candidate(candidate, text, match.start(1)):
+                entities["PERSON"].add(candidate)
         entities["LOC"].update(_normalize_for_match(match) for match in self.dynamic_loc_pattern.findall(text))
         entities["LOC"].update(self._extract_capitalized_single_token_locs(text))
         entities["ORG"].update(_normalize_for_match(match) for match in self.dynamic_org_pattern.findall(text))

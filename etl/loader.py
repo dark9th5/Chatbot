@@ -1,6 +1,7 @@
 import pymysql
 from typing import List
 from .models import Article
+from .content_cleaner import strip_article_boilerplate
 import sys
 
 class DatabaseLoader:
@@ -8,6 +9,7 @@ class DatabaseLoader:
 
     # Khởi tạo Database Loader và thiết lập bảng dữ liệu
     def __init__(self):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self._init_database()
 
     # Tạo kết nối đến cơ sở dữ liệu MySQL
@@ -76,7 +78,7 @@ class DatabaseLoader:
                         article.title,
                         article.link,
                         article.summary,
-                        article.content,
+                        strip_article_boilerplate(article.content or "", article.source),
                         article.published_date,
                         article.source,
                         article.category

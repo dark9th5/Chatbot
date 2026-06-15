@@ -10,6 +10,7 @@ class JaccardDeduplicator:
     """
     # Khởi tạo bộ lọc trùng lặp với ngưỡng tương đồng mặc định là 0.8
     def __init__(self, threshold: float = 0.8):
+        """Khởi tạo đối tượng và chuẩn bị các phụ thuộc cần dùng."""
         self.threshold = threshold
         # Lưu trữ signature (set of words) của các bài đã quét trong session
         self.processed_signatures: List[Set[str]] = []

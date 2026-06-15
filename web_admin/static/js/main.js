@@ -1,6 +1,6 @@
-// Main JavaScript for News Chatbot Admin
+// JavaScript chính cho trang quản trị Chatbot Tin tức.
 
-// Toast notification function
+// Hàm hiển thị thông báo nổi ở góc màn hình.
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -26,7 +26,7 @@ function showToast(message, type = 'success') {
     }, 3000);
 }
 
-// Add animations
+// Khối CSS động phục vụ hiệu ứng xuất hiện và biến mất của thông báo.
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
@@ -53,7 +53,7 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
-// Smooth scroll
+// Hàm xử lý cuộn mượt cho các liên kết neo trong trang.
 document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     anchor.addEventListener('click', function (e) {
         e.preventDefault();
@@ -67,7 +67,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     });
 });
 
-// Active nav link
+// Khối đánh dấu menu đang được mở dựa trên đường dẫn hiện tại.
 const currentPath = window.location.pathname;
 document.querySelectorAll('.nav-link').forEach(link => {
     if (link.getAttribute('href') === currentPath ||
@@ -77,7 +77,7 @@ document.querySelectorAll('.nav-link').forEach(link => {
     }
 });
 
-// Auto-hide alerts
+// Khối tự ẩn các cảnh báo sau một khoảng thời gian ngắn.
 setTimeout(() => {
     document.querySelectorAll('.alert').forEach(alert => {
         alert.style.animation = 'slideOut 0.3s ease';
@@ -85,4 +85,4 @@ setTimeout(() => {
     });
 }, 5000);
 
-console.log('📰 News Chatbot Admin loaded successfully!');
+console.log('📰 Trang quản trị Chatbot Tin tức đã tải xong!');

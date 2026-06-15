@@ -6,13 +6,10 @@ from email.utils import parsedate_to_datetime
 from .models import Article
 
 class CustomRSSParser:
-    """
-    Parser RSS tùy chỉnh sử dụng xml.etree.ElementTree.
-    Thay thế cho thư viện feedparser để tối ưu hiệu năng và RAM.
-    """
 
     # Phân tích nội dung RSS từ URL và trả về danh sách các đối tượng Article
     def parse(self, url: str, source_name: str, category: str) -> List[Article]:
+        """Phân tích dữ liệu nguồn và chuyển về cấu trúc chuẩn."""
         try:
             # 1. Fetch XML Content
             headers = {

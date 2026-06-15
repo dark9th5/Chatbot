@@ -11,12 +11,14 @@ class ArticleRepository(BaseRepository):
     """Repository truy vấn bảng articles (bài viết gốc)"""
 
     def get_by_id(self, article_id: int) -> Optional[Dict]:
+        """Lấy dữ liệu cần thiết cho luồng xử lý."""
         return self._fetch_one(
             'SELECT id, title, link, source, summary, published_date FROM articles WHERE id = %s',
             (article_id,)
         )
 
     def get_by_ids(self, article_ids: List[int]) -> Dict[int, Dict]:
+        """Lấy dữ liệu cần thiết cho luồng xử lý."""
         if not article_ids:
             return {}
 
@@ -31,5 +33,6 @@ class ArticleRepository(BaseRepository):
         return {row['id']: row for row in rows}
 
     def count(self) -> int:
+        """Đếm số lượng bản ghi phù hợp với điều kiện."""
         result = self._fetch_one('SELECT COUNT(*) as total FROM articles')
         return result['total'] if result else 0
